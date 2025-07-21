@@ -1,5 +1,4 @@
 #include "Banks/SetAutoBank.h"
-
 #include "ZGBMain.h"
 #include "Keys.h"
 #include "SpriteManager.h"
@@ -8,14 +7,14 @@
 
 #define CD_FRAME_TIMER 1
 
-#define ENEMY_SPEED 5
+#define ENEMY_SPEED 20 // Slower than BasicVirus
 #define TOTAL_FRAMES 3
 
 extern Sprite* scroll_target;
 
 void START() {
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
-    THIS->custom_data[CD_ENEMY_HEALTH] = 3;
+    THIS->custom_data[CD_ENEMY_HEALTH] = 5; // Takes 5 hits
     THIS->custom_data[CD_MOVE_TIMER] = 0;
 }
 
@@ -41,7 +40,7 @@ void UPDATE() {
     UINT8 frame = THIS->anim_frame;
 
     // Walking animation logic
-    if((--THIS->custom_data[CD_FRAME_TIMER]/10) == 0) {
+    if((--THIS->custom_data[CD_FRAME_TIMER]/17) == 0) {
         THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
         frame = (THIS->anim_frame + 1) % TOTAL_FRAMES;
     }
@@ -49,6 +48,7 @@ void UPDATE() {
     // Hit feedback logic: show hit frame when recently hit
     if (THIS->custom_data[CD_BLINK_TIMER] > 0) {
         THIS->custom_data[CD_BLINK_TIMER]--;
+
         if ((THIS->custom_data[CD_BLINK_TIMER] / 2) % 2 == 0) {
             frame = 3;
         }
@@ -56,8 +56,9 @@ void UPDATE() {
 
     SetFrame(THIS, frame);
     TranslateSprite(THIS, dx, dy);
+
 }
 
 void DESTROY() {
     // Cleanup if needed
-}
+} 

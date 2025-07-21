@@ -24,7 +24,7 @@
 
 // Max enemies per level
 #define MAX_ENEMIES_PER_LEVEL 10
-#define MAX_LEVELS 4
+#define MAX_LEVELS 6
 
 
 IMPORT_TILES(font);
@@ -44,15 +44,19 @@ UINT8 next_round_timer = NEXT_ROUND_TIMER;   // frames between levels
 UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
 
+UINT16 ready_coins = 0; // Player's currency
+
 const UINT8 level_spawns[MAX_LEVELS][MAX_ENEMIES_PER_LEVEL] = {
     {ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED},
-    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED}
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_TANK, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC}
 };
 
 // How many enemies each level has
-const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 4};
+const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 4, 4, 4};
 UINT8 enemy_spawn_index = 0;
 
 
@@ -96,10 +100,17 @@ void SpawnEnemies() {
                 case ENEMY_TYPE_SPEED:
                     virus = SpriteManagerAdd(SpeedVirus, x, y);
                     break;
+                case ENEMY_TYPE_TANK:
+                    virus = SpriteManagerAdd(TankVirus, x, y);
+                    break;
             }
 
             if (virus) {
-                virus->custom_data[CD_ENEMY_HEALTH] = 3;
+                if (type == ENEMY_TYPE_TANK) {
+                    virus->custom_data[CD_ENEMY_HEALTH] = 5;
+                } else {
+                    virus->custom_data[CD_ENEMY_HEALTH] = 3;
+                }
             }
 
             enemies_left_to_spawn--;
@@ -140,6 +151,13 @@ void LoadLevel(UINT8 level) {
 
 void START() {
     scroll_target = SpriteManagerAdd(SpritePlayer, 90, 50);
+
+    // Spawn a Door to the right of the player
+    Sprite* door = SpriteManagerAdd(Door, 120, 50); // x=120, y=50, cost=20 (example)
+    if (door) {
+        door->custom_data[CD_DOOR_STATE] = 0; // Closed
+        door->custom_data[CD_DOOR_COST] = 1; // Cost in Ready Coins (custom property)
+    }
 
     UINT8 collision_tiles[] = { 1, 0 };
     InitScroll(BANK(map), &map, collision_tiles, 0);

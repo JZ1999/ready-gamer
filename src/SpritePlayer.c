@@ -17,6 +17,26 @@ Direction player_direction;
 
 UINT8 shoot_cooldown;
 
+// Helper function to check for closed door collision
+UINT8 CollidesWithClosedDoor(Sprite* player, INT16 dx, INT16 dy) {
+    UINT8 i;
+    Sprite* spr;
+    SPRITEMANAGER_ITERATE(i, spr) {
+        if (IsDoorType(spr->type) && spr->custom_data[CD_DOOR_STATE] == 0) {
+            // Simulate next position
+            INT16 orig_x = player->x;
+            INT16 orig_y = player->y;
+            player->x += dx;
+            player->y += dy;
+            UINT8 collides = CheckCollision(player, spr);
+            player->x = orig_x;
+            player->y = orig_y;
+            if (collides) return 1;
+        }
+    }
+    return 0;
+}
+
 void TakeDamage(Sprite* player) {
     if(player->custom_data[CD_INVINCIBILITY] > 0) return;
 
@@ -51,23 +71,31 @@ void UPDATE() {
     if(THIS->custom_data[CD_INVINCIBILITY] > 0) THIS->custom_data[CD_INVINCIBILITY]--;
 
     if(KEY_PRESSED(J_UP)) {
-        TranslateSprite(THIS, 0, -1);
+        if (!CollidesWithClosedDoor(THIS, 0, -1)) {
+            TranslateSprite(THIS, 0, -1);
+        }
         SetFrame(THIS, 1);
         player_direction = DIR_UP;
     } 
     if(KEY_PRESSED(J_DOWN)) {
-        TranslateSprite(THIS, 0, 1);
+        if (!CollidesWithClosedDoor(THIS, 0, 1)) {
+            TranslateSprite(THIS, 0, 1);
+        }
         SetFrame(THIS, 2);
         player_direction = DIR_DOWN;
     }
     if(KEY_PRESSED(J_LEFT)) {
-        TranslateSprite(THIS, -1, 0);
+        if (!CollidesWithClosedDoor(THIS, -1, 0)) {
+            TranslateSprite(THIS, -1, 0);
+        }
         THIS->mirror = NO_MIRROR;
         SetFrame(THIS, 0);
         player_direction = DIR_LEFT;
     }
     if(KEY_PRESSED(J_RIGHT)) {
-        TranslateSprite(THIS, 1, 0);
+        if (!CollidesWithClosedDoor(THIS, 1, 0)) {
+            TranslateSprite(THIS, 1, 0);
+        }
         THIS->mirror = V_MIRROR;
         SetFrame(THIS, 0);
         player_direction = DIR_RIGHT;
@@ -84,7 +112,7 @@ void UPDATE() {
     Sprite* spr;
     SPRITEMANAGER_ITERATE(i, spr) {
         if(
-            spr->type == BasicVirus || spr->type == SpeedVirus
+            spr->type == BasicVirus || spr->type == SpeedVirus || spr->type == Door 
         ) {
             if(CheckCollision(THIS, spr)) {
                 TakeDamage(THIS);

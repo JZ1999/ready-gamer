@@ -10,6 +10,8 @@ _SPRITE_DMG(SpritePlayer, player)\
 _SPRITE_DMG(SpriteScrew, screw)\
 _SPRITE_DMG(BasicVirus, basicVirus)\
 _SPRITE_DMG(SpeedVirus, speedVirus)\
+_SPRITE_DMG(TankVirus, tankVirus)\
+_SPRITE_DMG(Door, door)\
 SPRITE_DEF_END
 
 #include "ZGBMain_Init.h"

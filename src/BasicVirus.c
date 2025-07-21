@@ -38,20 +38,24 @@ void UPDATE() {
     UINT16 new_x = THIS->x + dx;
     UINT16 new_y = THIS->y + dy;
 
-    // Blink logic
+    UINT8 frame = THIS->anim_frame;
+
+    // Walking animation logic
+    if((--THIS->custom_data[CD_FRAME_TIMER]/10) == 0) {
+        THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
+        frame = (THIS->anim_frame + 1) % TOTAL_FRAMES;
+    }
+
+    // Hit feedback logic: show hit frame when recently hit
     if (THIS->custom_data[CD_BLINK_TIMER] > 0) {
         THIS->custom_data[CD_BLINK_TIMER]--;
 
         if ((THIS->custom_data[CD_BLINK_TIMER] / 2) % 2 == 0) {
-            SetFrame(THIS, 3); // 3 = blank frame (must exist in your sprite)
-        }
-    } else {
-        if((--THIS->custom_data[CD_FRAME_TIMER]/10) == 0) {
-            THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
-            SetFrame(THIS, (THIS->anim_frame + 1) % TOTAL_FRAMES);
+            frame = 3;
         }
     }
 
+    SetFrame(THIS, frame);
     TranslateSprite(THIS, dx, dy);
 }
 

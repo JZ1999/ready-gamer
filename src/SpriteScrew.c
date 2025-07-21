@@ -13,9 +13,11 @@
 #define CD_ANIM_OFFSET   2
 
 extern UINT8 enemies_killed;
+extern UINT16 ready_coins;
 
 void KillVirus(UINT8 virus_id) {
     ++enemies_killed;
+    ++ready_coins; // Each enemy gives 1 Ready Coin
     SpriteManagerRemove(virus_id);
 }
 
@@ -60,11 +62,11 @@ void UPDATE() {
     UINT8 i;
     Sprite* spr;
     SPRITEMANAGER_ITERATE(i, spr) {
-		if (spr->type == BasicVirus || spr->type == SpeedVirus) {
+		if (IsEnemyType(spr->type)) {
 			if (CheckCollision(THIS, spr)) {
                 if(spr->custom_data[CD_ENEMY_HEALTH] > 1) {
                     spr->custom_data[CD_ENEMY_HEALTH]--;
-                    spr->custom_data[CD_BLINK_TIMER] = 10;
+                    spr->custom_data[CD_BLINK_TIMER] = 10; // Set hit feedback timer (higher value for more visible effect)
                 } else {
                     UINT8 virus_id = i;
                     KillVirus(virus_id);
