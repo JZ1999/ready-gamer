@@ -12,7 +12,13 @@
 #define CD_ANIM_TIMER    1
 #define CD_ANIM_OFFSET   2
 
-extern void KillVirus(UINT8 virus_id);
+extern UINT8 enemies_killed;
+
+void KillVirus(UINT8 virus_id) {
+    ++enemies_killed;
+    SpriteManagerRemove(virus_id);
+}
+
 
 void START() {
     if(THIS->custom_data[CD_DIR] == 2 || THIS->custom_data[CD_DIR] == 3) { // Left or Right
@@ -54,7 +60,7 @@ void UPDATE() {
     UINT8 i;
     Sprite* spr;
     SPRITEMANAGER_ITERATE(i, spr) {
-		if (spr->type == BasicVirus) {
+		if (spr->type == BasicVirus || spr->type == SpeedVirus) {
 			if (CheckCollision(THIS, spr)) {
                 if(spr->custom_data[CD_ENEMY_HEALTH] > 1) {
                     spr->custom_data[CD_ENEMY_HEALTH]--;

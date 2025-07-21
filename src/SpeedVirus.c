@@ -8,7 +8,7 @@
 
 #define CD_FRAME_TIMER 1
 
-#define ENEMY_SPEED 10
+#define ENEMY_SPEED 5
 #define TOTAL_FRAMES 3
 
 extern Sprite* scroll_target;

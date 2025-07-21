@@ -1,12 +1,13 @@
-#include "Banks/SetAutoBank.h"
+#include <stddef.h>
+#include <rand.h>
 
+#include "Banks/SetAutoBank.h"
 #include "ZGBMain.h"
 #include "Scroll.h"
 #include "SpriteManager.h"
 #include "Music.h"
 #include "Print.h"
 #include "SpriteData.h"
-#include <rand.h>
 
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
@@ -20,6 +21,11 @@
 #define MAX_Y_ENEMY_SPAWN 118
 
 #define CENTER_X(text_len) ((SCREEN_TILE_WIDTH - text_len) / 2)
+
+// Max enemies per level
+#define MAX_ENEMIES_PER_LEVEL 10
+#define MAX_LEVELS 4
+
 
 IMPORT_TILES(font);
 
@@ -37,6 +43,17 @@ UINT8 enemies_left_to_spawn = 0; // how many still to spawn
 UINT8 next_round_timer = NEXT_ROUND_TIMER;   // frames between levels
 UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
+
+const UINT8 level_spawns[MAX_LEVELS][MAX_ENEMIES_PER_LEVEL] = {
+    {ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED}
+};
+
+// How many enemies each level has
+const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 4};
+UINT8 enemy_spawn_index = 0;
 
 
 // Returns a random X/Y position along the border
@@ -63,16 +80,30 @@ void GetRandomEdgePosition(UINT8* x, UINT8* y) {
 }
 
 void SpawnEnemies() {
-     if (enemies_left_to_spawn > 0) {
+     if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
         if (--spawn_timer == 0) {
             UINT8 x, y;
             GetRandomEdgePosition(&x, &y);
-            Sprite* virus = SpriteManagerAdd(BasicVirus, x, y);
+
+            UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
+
+            Sprite* virus = NULL;
+
+            switch(type) {
+                case ENEMY_TYPE_BASIC:
+                    virus = SpriteManagerAdd(BasicVirus, x, y);
+                    break;
+                case ENEMY_TYPE_SPEED:
+                    virus = SpriteManagerAdd(SpeedVirus, x, y);
+                    break;
+            }
+
             if (virus) {
                 virus->custom_data[CD_ENEMY_HEALTH] = 3;
             }
 
             enemies_left_to_spawn--;
+            enemy_spawn_index++;
             spawn_timer = ENEMY_SPAWN_DELAY; // reset timer
         }
     }
@@ -96,10 +127,12 @@ void CheckForNextLevel() {
 
 
 void LoadLevel(UINT8 level) {
-    enemies_to_spawn = 1 + level;
+    if (level >= MAX_LEVELS) level = MAX_LEVELS - 1;
 
+    enemies_to_spawn = level_lengths[level];
     enemies_left_to_spawn = enemies_to_spawn;
     spawn_timer = ENEMY_SPAWN_DELAY;
+    enemy_spawn_index = 0;
 
     DPRINT_POS(6, 0);
     DPrintf("Level %d", current_level);

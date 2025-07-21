@@ -84,7 +84,7 @@ void UPDATE() {
     Sprite* spr;
     SPRITEMANAGER_ITERATE(i, spr) {
         if(
-            spr->type == BasicVirus // || spr->type == AnotherVirusType, etc.
+            spr->type == BasicVirus || spr->type == SpeedVirus
         ) {
             if(CheckCollision(THIS, spr)) {
                 TakeDamage(THIS);

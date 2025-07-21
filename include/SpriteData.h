@@ -10,9 +10,13 @@ typedef enum {
     DIR_RIGHT
 } Direction;
 
+#define ENEMY_TYPE_BASIC 0
+#define ENEMY_TYPE_SPEED 1
+
 // Common custom_data indices
 #define CD_DIR           0
 #define CD_ENEMY_HEALTH  0
-#define CD_BLINK_TIMER 2
+#define CD_BLINK_TIMER   2
+#define CD_MOVE_TIMER    2
 
 #endif
