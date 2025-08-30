@@ -49,7 +49,7 @@ UINT16 ready_coins = 0; // Player's currency
 const UINT8 level_spawns[MAX_LEVELS][MAX_ENEMIES_PER_LEVEL] = {
     {ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
-    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_TANK, ENEMY_TYPE_SPEED},
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED},
     {ENEMY_TYPE_TANK, ENEMY_TYPE_TANK, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED},
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC}
@@ -140,13 +140,13 @@ void CheckForNextLevel() {
 void LoadLevel(UINT8 level) {
     if (level >= MAX_LEVELS) level = MAX_LEVELS - 1;
 
-    enemies_to_spawn = level_lengths[level];
+    enemies_to_spawn = level_lengths[level - 1];
     enemies_left_to_spawn = enemies_to_spawn;
     spawn_timer = ENEMY_SPAWN_DELAY;
     enemy_spawn_index = 0;
 
-    DPRINT_POS(6, 0);
-    DPrintf("Level %d", current_level);
+    DPRINT_POS(0, 0);
+    DPrintf("       Level %d      ", current_level);
 }
 
 void START() {
@@ -162,9 +162,11 @@ void START() {
     UINT8 collision_tiles[] = { 1, 0 };
     InitScroll(BANK(map), &map, collision_tiles, 0);
 
-    INIT_CONSOLE(font, 1);
-    DPRINT_POS(6, 0);
-    DPrintf("Level %d", current_level);
+    INIT_CONSOLE(font, 2); // Increase console height to 2 lines
+    DPRINT_POS(0, 0);
+    DPrintf("       Level %d      ", current_level);
+    DPRINT_POS(0, 1);
+    DPrintf("Ready Coins: %d", ready_coins);
     PlayMusic(track1, LOOP);
 }
 
@@ -178,6 +180,9 @@ void UPDATE() {
         }
         return;
     }
+
+    DPRINT_POS(0, 1);
+    DPrintf("Ready Coins: %d", ready_coins);
 
     SpawnEnemies();
     

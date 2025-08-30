@@ -1,6 +1,10 @@
 #ifndef ZGBMAIN_H
 #define ZGBMAIN_H
 
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
 #define STATES \
 _STATE(StateGame)\
 STATE_DEF_END
