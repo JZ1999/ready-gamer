@@ -6,8 +6,8 @@
 #include "Music.h"
 
 // Import the simple menu tiles and tilemap for testing
-IMPORT_TILES(menu_tileset);
-IMPORT_MAP(menu_tilemap);
+IMPORT_TILES(MenuTileset);
+IMPORT_MAP(MenuTilemap);
 
 // Import menu music
 DECLARE_MUSIC(menu);
@@ -19,7 +19,7 @@ DECLARE_MUSIC(menu);
 void START() {
     // Initialize scroll with the optimized menu tiles and tilemap from GB Studio
     // This uses the properly optimized 157 tiles (under the 192 limit)
-    InitScrollWithTiles(BANK(menu_tilemap), &menu_tilemap, BANK(menu_tileset), &menu_tileset, 0, 0);
+    InitScrollWithTiles(BANK(MenuTilemap), &MenuTilemap, BANK(MenuTileset), &MenuTileset, 0, 0);
     
     // Show background and sprites
     SHOW_BKG;
