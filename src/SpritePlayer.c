@@ -6,6 +6,7 @@
 #include "SpriteManager.h"
 #include "SpriteData.h"
 #include "Print.h"
+#include "SoundEffects.h"
 
 Direction player_direction;
 
@@ -18,6 +19,19 @@ extern UINT16 ready_coins; // Player's currency
 #define INVINCIBILITY_FRAMES 60
 
 UINT8 shoot_cooldown;
+
+// Custom movement function that checks for partial brick collisions
+static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
+    // First check if the movement would collide with a partial brick
+    extern UINT8 CheckCustomTileCollision(Sprite* sprite, INT16 dx, INT16 dy);
+    
+    if (CheckCustomTileCollision(sprite, x, y)) {
+        return 1; // Collision detected
+    }
+    
+    // If no custom collision, use the standard TranslateSprite
+    return TranslateSprite(sprite, x, y);
+}
 
 // Helper function to check for closed door collision
 UINT8 CollidesWithClosedDoor(Sprite* player, INT16 dx, INT16 dy) {
@@ -111,6 +125,7 @@ UINT8 HandleDoorInteraction(Sprite* door_sprite) {
         }
         DPRINT_POS(0, 0);
         Printf("     Door opened!     ");
+        PlayDoorOpenSound(); // Play door opening sound
         return 1; // Door interaction handled
     } else {
         DPRINT_POS(0, 0);
@@ -156,21 +171,21 @@ void UPDATE() {
 
     if(KEY_PRESSED(J_UP)) {
         if (!CollidesWithClosedDoor(THIS, 0, -1)) {
-            TranslateSprite(THIS, 0, -1);
+            CustomTranslateSprite(THIS, 0, -1);
         }
         SetFrame(THIS, 1);
         player_direction = DIR_UP;
     } 
     if(KEY_PRESSED(J_DOWN)) {
         if (!CollidesWithClosedDoor(THIS, 0, 1)) {
-            TranslateSprite(THIS, 0, 1);
+            CustomTranslateSprite(THIS, 0, 1);
         }
         SetFrame(THIS, 2);
         player_direction = DIR_DOWN;
     }
     if(KEY_PRESSED(J_LEFT)) {
         if (!CollidesWithClosedDoor(THIS, -1, 0)) {
-            TranslateSprite(THIS, -1, 0);
+            CustomTranslateSprite(THIS, -1, 0);
         }
         THIS->mirror = NO_MIRROR;
         SetFrame(THIS, 0);
@@ -178,7 +193,7 @@ void UPDATE() {
     }
     if(KEY_PRESSED(J_RIGHT)) {
         if (!CollidesWithClosedDoor(THIS, 1, 0)) {
-            TranslateSprite(THIS, 1, 0);
+            CustomTranslateSprite(THIS, 1, 0);
         }
         THIS->mirror = V_MIRROR;
         SetFrame(THIS, 0);
@@ -189,6 +204,7 @@ void UPDATE() {
         Sprite* screw = SpriteManagerAddEx(SpriteScrew, THIS->x, THIS->y, (UINT8)player_direction);
         screw->custom_data[CD_DIR] = (UINT8)player_direction;
         shoot_cooldown = SHOOT_COOLDOWN;
+        PlayScrewShotSound();
     }
 
 }

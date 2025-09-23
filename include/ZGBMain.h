@@ -6,6 +6,7 @@
 #endif
 
 #define STATES \
+_STATE(StateMenu)\
 _STATE(StateGame)\
 STATE_DEF_END
 
@@ -16,6 +17,7 @@ _SPRITE_DMG(BasicVirus, basicVirus)\
 _SPRITE_DMG(SpeedVirus, speedVirus)\
 _SPRITE_DMG(TankVirus, tankVirus)\
 _SPRITE_DMG(Door, door)\
+_SPRITE_DMG(SpawnPoint, spawner)\
 SPRITE_DEF_END
 
 #include "ZGBMain_Init.h"

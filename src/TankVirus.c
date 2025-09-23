@@ -12,6 +12,13 @@
 
 extern Sprite* scroll_target;
 
+// Custom movement function that checks for partial brick collisions
+static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
+    // Use the wall avoidance movement function
+    extern UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy);
+    return EnemyMoveWithWallAvoidance(sprite, x, y);
+}
+
 void START() {
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 5; // Takes 5 hits
@@ -55,7 +62,7 @@ void UPDATE() {
     }
 
     SetFrame(THIS, frame);
-    TranslateSprite(THIS, dx, dy);
+    CustomTranslateSprite(THIS, dx, dy);
 
 }
 

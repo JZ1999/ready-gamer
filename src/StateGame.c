@@ -8,6 +8,7 @@
 #include "Music.h"
 #include "Print.h"
 #include "SpriteData.h"
+#include "SoundEffects.h"
 
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
@@ -59,35 +60,135 @@ const UINT8 level_spawns[MAX_LEVELS][MAX_ENEMIES_PER_LEVEL] = {
 const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 4, 4, 4};
 UINT8 enemy_spawn_index = 0;
 
+// Tile indices for different brick types
+#define TILE_EMPTY 0
+#define TILE_FULL_BRICK 1
+#define TILE_PARTIAL_BRICK_1 2
+#define TILE_PARTIAL_BRICK_2 3
 
-// Returns a random X/Y position along the border
-void GetRandomEdgePosition(UINT8* x, UINT8* y) {
-    UINT8 side = RANDOM % 4; // 0: top, 1: bottom, 2: left, 3: right
-    switch(side) {
-        case 0: // Top
-            *x = (RANDOM % (SCREEN_WIDTH - EDGE_PADDING * 2)) + EDGE_PADDING;
-            *y = EDGE_PADDING;
-            break;
-        case 1: // Bottom
-            *x = (RANDOM % (SCREEN_WIDTH - EDGE_PADDING * 2)) + EDGE_PADDING;
-            *y = MAX_Y_ENEMY_SPAWN;
-            break;
-        case 2: // Left
-            *x = EDGE_PADDING;
-            *y = (RANDOM % (SCREEN_HEIGHT - EDGE_PADDING * 2)) + EDGE_PADDING;
-            break;
-        case 3: // Right
-            *x = SCREEN_WIDTH - EDGE_PADDING;
-            *y = (RANDOM % (SCREEN_HEIGHT - EDGE_PADDING * 2)) + EDGE_PADDING;
-            break;
+// Spawn point positions (fixed positions for the two spawn points)
+#define SPAWN_POINT_1_X 20
+#define SPAWN_POINT_1_Y 20
+#define SPAWN_POINT_2_X 100
+#define SPAWN_POINT_2_Y 80
+
+// Get a random spawn point position
+void GetRandomSpawnPosition(UINT8* x, UINT8* y) {
+    // Choose randomly between the two spawn points
+    if (RANDOM % 2 == 0) {
+        *x = SPAWN_POINT_1_X;
+        *y = SPAWN_POINT_1_Y;
+    } else {
+        *x = SPAWN_POINT_2_X;
+        *y = SPAWN_POINT_2_Y;
     }
+}
+
+// Wall avoidance movement function for enemies
+UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {
+    // Try the original movement first using ZGB's built-in collision
+    UINT8 result = TranslateSprite(enemy, dx, dy);
+    
+    // If TranslateSprite returned a tile collision (non-zero), try avoidance
+    if (result != 0) {
+        // If blocked, try to move up or down based on player position
+        INT16 avoid_dy = 0;
+        
+        if (scroll_target->y < enemy->y) {
+            // Player is above, try to move up
+            avoid_dy = -1;
+        } else if (scroll_target->y > enemy->y) {
+            // Player is below, try to move down
+            avoid_dy = 1;
+        } else {
+            // Player is at same Y level, try up first, then down
+            avoid_dy = -1;
+        }
+        
+        // Try the avoidance movement
+        result = TranslateSprite(enemy, 0, avoid_dy);
+        
+        // If still blocked, try the opposite direction
+        if (result != 0) {
+            if (avoid_dy == -1) {
+                avoid_dy = 1;
+            } else {
+                avoid_dy = -1;
+            }
+            
+            result = TranslateSprite(enemy, 0, avoid_dy);
+        }
+    }
+    
+    return result;
+}
+
+// Custom collision detection for partial brick tiles
+UINT8 CheckPartialBrickCollision(Sprite* sprite, INT16 dx, INT16 dy) {
+    // Get the tile at the sprite's position
+    UINT8 tile_x = (sprite->x + dx) >> 3;
+    UINT8 tile_y = (sprite->y + dy) >> 3;
+    
+    // Get the tile type at this position
+    UINT8 tile = GetScrollTile(tile_x, tile_y);
+    
+    // Check if it's a partial brick tile
+    if (tile == TILE_PARTIAL_BRICK_1 || tile == TILE_PARTIAL_BRICK_2) {
+        // For partial bricks, use quarter-based collision
+        UINT8 sprite_bottom_y = sprite->y + sprite->coll_h - 1 + dy;
+        UINT8 tile_top_y = tile_y * 8;
+        UINT8 tile_quarter_y = tile_top_y + 2; // Quarter from top (2 pixels)
+        UINT8 tile_three_quarter_y = tile_top_y + 6; // Three quarters from top (6 pixels)
+        
+        if (tile == TILE_PARTIAL_BRICK_1) {
+            // Partial brick 1: collision in top quarter
+            if (sprite_bottom_y <= tile_quarter_y) {
+                return 1;
+            }
+        } else if (tile == TILE_PARTIAL_BRICK_2) {
+            // Partial brick 2: collision in bottom quarter
+            if (sprite_bottom_y >= tile_three_quarter_y) {
+                return 1;
+            }
+        }
+    }
+    
+    return 0;
+}
+
+// Enhanced collision check that includes partial brick logic
+UINT8 CheckCustomTileCollision(Sprite* sprite, INT16 dx, INT16 dy) {
+    // First check the standard collision (full brick tiles)
+    UINT8 tile_x = (sprite->x + dx) >> 3;
+    UINT8 tile_y = (sprite->y + dy) >> 3;
+    
+    // Check bounds
+    if (tile_x >= scroll_tiles_w || tile_y >= scroll_tiles_h) {
+        return 0;
+    }
+    
+    // Get the tile type
+    UINT8 tile = GetScrollTile(tile_x, tile_y);
+    
+    // Check if it's a full brick tile (index 1)
+    if (tile == TILE_FULL_BRICK) {
+        return 1; // Collision detected
+    }
+    
+    // Check for partial brick collision
+    if (CheckPartialBrickCollision(sprite, dx, dy)) {
+        return 1;
+    }
+    
+    // Return 0 for empty space and other non-collision tiles
+    return 0;
 }
 
 void SpawnEnemies() {
      if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
         if (--spawn_timer == 0) {
             UINT8 x, y;
-            GetRandomEdgePosition(&x, &y);
+            GetRandomSpawnPosition(&x, &y);
 
             UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
 
@@ -153,12 +254,14 @@ void START() {
     scroll_target = SpriteManagerAdd(SpritePlayer, 90, 50);
 
     // Spawn a Door to the right of the player
-    Sprite* door = SpriteManagerAdd(Door, 120, 50); // x=120, y=50, cost=20 (example)
+    Sprite* door = SpriteManagerAdd(Door, 115, 52); // x=120, y=50
     if (door) {
         door->custom_data[CD_DOOR_STATE] = 0; // Closed
-        door->custom_data[CD_DOOR_COST] = 1; // Cost in Ready Coins (custom property)
+        door->custom_data[CD_DOOR_COST] = 10; // Cost in Ready Coins (custom property)
     }
 
+    // Only full brick tile (index 1) has collision
+    // Empty space (index 0) and partial bricks (index 2, 3) will be handled with custom collision
     UINT8 collision_tiles[] = { 1, 0 };
     InitScroll(BANK(map), &map, collision_tiles, 0);
 
@@ -168,6 +271,10 @@ void START() {
     DPRINT_POS(0, 1);
     DPrintf("Ready Coins: %d", ready_coins);
     PlayMusic(track1, LOOP);
+    
+    // Spawn the two spawn point sprites
+    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
+    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
 }
 
 void UPDATE() {
@@ -187,4 +294,6 @@ void UPDATE() {
     SpawnEnemies();
     
     CheckForNextLevel();
+    UpdateDoorOpeningMelody();
+    UpdateEnemyHitMelody();
 }
