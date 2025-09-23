@@ -230,16 +230,56 @@ void CheckForNextLevel() {
         next_round_timer = NEXT_ROUND_TIMER; // reset timer
 
         current_level++;
-        waiting_for_start = 1;
-        enemies_to_spawn = 0;
+        
+        // Update level display and reset enemy spawning for next level
+        DPRINT_POS(0, 0);
+        DPrintf("       Level %d      ", current_level);
+        
+        enemies_to_spawn = level_lengths[current_level - 1];
+        enemies_left_to_spawn = enemies_to_spawn;
         enemies_killed = 0;
         spawn_timer = ENEMY_SPAWN_DELAY;
+        enemy_spawn_index = 0;
+        
+        // Update door cost for next level
+        UINT8 i;
+        Sprite* spr;
+        // Ensure spawn points are still present for next level
+        UINT8 spawn_point_count = 0;
+        SPRITEMANAGER_ITERATE(i, spr) {
+            if (spr->type == SpawnPoint) {
+                spawn_point_count++;
+            }
+        }
+        
+        // If spawn points are missing, recreate them
+        if (spawn_point_count < 2) {
+            SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
+            SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
+        }
     }
 }
 
 
 void LoadLevel(UINT8 level) {
     if (level >= MAX_LEVELS) level = MAX_LEVELS - 1;
+
+    // Clear all existing sprites first
+    SpriteManagerReset();
+    
+    // Spawn a new player
+    scroll_target = SpriteManagerAdd(SpritePlayer, 90, 50);
+    
+    // Spawn a Door to the right of the player
+    Sprite* door = SpriteManagerAdd(Door, 115, 52); // x=120, y=50
+    if (door) {
+        door->custom_data[CD_DOOR_STATE] = 0; // Closed
+        door->custom_data[CD_DOOR_COST] = 10; // Cost in Ready Coins (custom property)
+    }
+    
+    // Spawn the two spawn point sprites
+    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
+    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
 
     enemies_to_spawn = level_lengths[level - 1];
     enemies_left_to_spawn = enemies_to_spawn;
@@ -251,15 +291,6 @@ void LoadLevel(UINT8 level) {
 }
 
 void START() {
-    scroll_target = SpriteManagerAdd(SpritePlayer, 90, 50);
-
-    // Spawn a Door to the right of the player
-    Sprite* door = SpriteManagerAdd(Door, 115, 52); // x=120, y=50
-    if (door) {
-        door->custom_data[CD_DOOR_STATE] = 0; // Closed
-        door->custom_data[CD_DOOR_COST] = 10; // Cost in Ready Coins (custom property)
-    }
-
     // Only full brick tile (index 1) has collision
     // Empty space (index 0) and partial bricks (index 2, 3) will be handled with custom collision
     UINT8 collision_tiles[] = { 1, 0 };
@@ -275,6 +306,42 @@ void START() {
     // Spawn the two spawn point sprites
     SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
     SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
+    
+    // Load the initial level (this will spawn the player and door)
+    LoadLevel(current_level);
+}
+
+void CheckForPlayerDeath() {
+    // Check if player sprite still exists
+    UINT8 i;
+    Sprite* spr;
+    UINT8 player_exists = 0;
+    
+    SPRITEMANAGER_ITERATE(i, spr) {
+        if (spr->type == SpritePlayer) {
+            player_exists = 1;
+            break;
+        }
+    }
+    
+    // If player doesn't exist, restart the level
+    if (!player_exists) {
+        // Reset level state
+        waiting_for_start = 1;
+        enemies_to_spawn = 0;
+        enemies_left_to_spawn = 0;
+        enemies_killed = 0;
+        spawn_timer = ENEMY_SPAWN_DELAY;
+        enemy_spawn_index = 0;
+        current_level = 1;
+        ready_coins = 0;
+        
+        // Clear the screen and show restart message
+        DPRINT_POS(0, 0);
+        DPrintf("   GAME OVER!   ");
+        DPRINT_POS(0, 1);
+        DPrintf("  Press any key");
+    }
 }
 
 void UPDATE() {
@@ -288,8 +355,16 @@ void UPDATE() {
         return;
     }
 
+    // Check if player is still alive
+    CheckForPlayerDeath();
+    
+    // If waiting for restart, don't continue with game logic
+    if(waiting_for_start) {
+        return;
+    }
+
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d", ready_coins);
+    DPrintf("Ready Coins: %d       ", ready_coins);
 
     SpawnEnemies();
     
