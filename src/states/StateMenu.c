@@ -11,6 +11,7 @@ IMPORT_MAP(MenuTilemap);
 
 // Import menu music
 DECLARE_MUSIC(menu);
+DECLARE_MUSIC(readygames);
 
 /**
  * Initializes the main menu state
@@ -38,13 +39,8 @@ void START() {
  */
 void UPDATE() {
     // Check for START button press to begin the game
-    if (KEY_TICKED(J_START)) {
-        SetState(StateGame);
-    }
-    
-    // Optional: Add other menu interactions here
-    // For example, A button to start game as well
-    if (KEY_TICKED(J_A)) {
+    if (KEY_TICKED(J_START) || KEY_TICKED(J_A)) {
+        PlayMusic(readygames, 0);
         SetState(StateGame);
     }
 }

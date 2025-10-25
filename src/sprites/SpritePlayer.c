@@ -90,6 +90,7 @@ void TakeDamage(Sprite* player) {
             SPRITEMANAGER_ITERATE(i, spr) {
                 if (spr->unique_id == THIS->unique_id) {
                     SpriteManagerRemove(i);
+                    SetState(StateGameOver);
                     break;
                 }
             }
@@ -206,7 +207,6 @@ void UPDATE() {
         shoot_cooldown = SHOOT_COOLDOWN;
         PlayScrewShotSound();
     }
-
 }
 
 void DESTROY() {
