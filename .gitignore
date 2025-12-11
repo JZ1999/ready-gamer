@@ -9,6 +9,7 @@
 /*.lst
 /*.o
 /*.asm
+*.code-workspace
 
 # VS Code or other IDE config
 .vscode/
