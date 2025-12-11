@@ -268,3 +268,9 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
+
+# ZGB
+ZGB/
+bin/
+Debug/
+DebugColor/
