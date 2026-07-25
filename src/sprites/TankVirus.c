@@ -23,6 +23,8 @@ void START() {
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 5; // Takes 5 hits
     THIS->custom_data[CD_MOVE_TIMER] = 0;
+    THIS->lim_x = 255;
+    THIS->lim_y = 255;
 }
 
 void UPDATE() {

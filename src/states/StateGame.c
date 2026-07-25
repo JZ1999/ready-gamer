@@ -3,13 +3,16 @@
 
 #include "Banks/SetAutoBank.h"
 #include "ZGBMain.h"
+#include "Math.h"
 #include "Scroll.h"
 #include "SpriteManager.h"
 #include "Music.h"
 #include "Print.h"
 #include "SpriteData.h"
 #include "SoundEffects.h"
-
+#include "BankManager.h"
+#include "Rooms.h"
+#include "StateGame.h"
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
@@ -29,12 +32,17 @@
 
 
 IMPORT_TILES(font);
+IMPORT_MAP(map);
 
 DECLARE_MUSIC(track1);
 
-IMPORT_MAP(map);
+static const UINT8 collision_tiles[] = { 1, 0 };
+
+extern UINT8 last_tile_loaded;
+extern UINT8 last_bg_pal_loaded;
 
 extern UINT8 current_level;
+extern UINT8 player_electric_attack;
 
 UINT8 enemies_killed = 0; // Global counter for killed enemies
 UINT8 enemies_to_spawn;
@@ -44,151 +52,53 @@ UINT8 enemies_left_to_spawn = 0; // how many still to spawn
 UINT8 next_round_timer = NEXT_ROUND_TIMER;   // frames between levels
 UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
+UINT8 pending_room_transition = 0;
+UINT8 pending_electric_pickup = 0;
 
 UINT16 ready_coins = 0; // Player's currency
 
 const UINT8 level_spawns[MAX_LEVELS][MAX_ENEMIES_PER_LEVEL] = {
-    {ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
-    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
-    {ENEMY_TYPE_BASIC, ENEMY_TYPE_TANK, ENEMY_TYPE_SPEED},
-    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED},
-    {ENEMY_TYPE_TANK, ENEMY_TYPE_TANK, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED},
-    {ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC}
+    /* Level 1: basics only */
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
+    /* Level 2+: BomberVirus introduced */
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER},
+    /* Level 3+: ChargeVirus introduced */
+    {ENEMY_TYPE_CHARGE, ENEMY_TYPE_BASIC, ENEMY_TYPE_BOMBER},
+    {ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC, ENEMY_TYPE_TANK},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED, ENEMY_TYPE_CHARGE, ENEMY_TYPE_TANK}
 };
 
 // How many enemies each level has
-const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 4, 4, 4};
+const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 5, 4, 4};
 UINT8 enemy_spawn_index = 0;
 
-// Tile indices for different brick types
-#define TILE_EMPTY 0
-#define TILE_FULL_BRICK 1
-#define TILE_PARTIAL_BRICK_1 2
-#define TILE_PARTIAL_BRICK_2 3
-
-// Spawn point positions (fixed positions for the two spawn points)
-#define SPAWN_POINT_1_X 20
-#define SPAWN_POINT_1_Y 20
-#define SPAWN_POINT_2_X 100
-#define SPAWN_POINT_2_Y 80
-
-// Get a random spawn point position
-void GetRandomSpawnPosition(UINT8* x, UINT8* y) {
-    // Choose randomly between the two spawn points
-    if (RANDOM % 2 == 0) {
-        *x = SPAWN_POINT_1_X;
-        *y = SPAWN_POINT_1_Y;
-    } else {
-        *x = SPAWN_POINT_2_X;
-        *y = SPAWN_POINT_2_Y;
-    }
+void SyncGameHud(void) {
+    INIT_CONSOLE(font, 2);
+    DPRINT_POS(0, 1);
+    DPrintf("Ready Coins: %d       ", ready_coins);
 }
 
-// Wall avoidance movement function for enemies
-UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {
-    // Try the original movement first using ZGB's built-in collision
-    UINT8 result = TranslateSprite(enemy, dx, dy);
-    
-    // If TranslateSprite returned a tile collision (non-zero), try avoidance
-    if (result != 0) {
-        // If blocked, try to move up or down based on player position
-        INT16 avoid_dy = 0;
-        
-        if (scroll_target->y < enemy->y) {
-            // Player is above, try to move up
-            avoid_dy = -1;
-        } else if (scroll_target->y > enemy->y) {
-            // Player is below, try to move down
-            avoid_dy = 1;
-        } else {
-            // Player is at same Y level, try up first, then down
-            avoid_dy = -1;
-        }
-        
-        // Try the avoidance movement
-        result = TranslateSprite(enemy, 0, avoid_dy);
-        
-        // If still blocked, try the opposite direction
-        if (result != 0) {
-            if (avoid_dy == -1) {
-                avoid_dy = 1;
-            } else {
-                avoid_dy = -1;
-            }
-            
-            result = TranslateSprite(enemy, 0, avoid_dy);
-        }
-    }
-    
-    return result;
-}
+void StartRoomEnemyWave(void) {
+    UINT8 wave_index = current_room;
 
-// Custom collision detection for partial brick tiles
-UINT8 CheckPartialBrickCollision(Sprite* sprite, INT16 dx, INT16 dy) {
-    // Get the tile at the sprite's position
-    UINT8 tile_x = (sprite->x + dx) >> 3;
-    UINT8 tile_y = (sprite->y + dy) >> 3;
-    
-    // Get the tile type at this position
-    UINT8 tile = GetScrollTile(tile_x, tile_y);
-    
-    // Check if it's a partial brick tile
-    if (tile == TILE_PARTIAL_BRICK_1 || tile == TILE_PARTIAL_BRICK_2) {
-        // For partial bricks, use quarter-based collision
-        UINT8 sprite_bottom_y = sprite->y + sprite->coll_h - 1 + dy;
-        UINT8 tile_top_y = tile_y * 8;
-        UINT8 tile_quarter_y = tile_top_y + 2; // Quarter from top (2 pixels)
-        UINT8 tile_three_quarter_y = tile_top_y + 6; // Three quarters from top (6 pixels)
-        
-        if (tile == TILE_PARTIAL_BRICK_1) {
-            // Partial brick 1: collision in top quarter
-            if (sprite_bottom_y <= tile_quarter_y) {
-                return 1;
-            }
-        } else if (tile == TILE_PARTIAL_BRICK_2) {
-            // Partial brick 2: collision in bottom quarter
-            if (sprite_bottom_y >= tile_three_quarter_y) {
-                return 1;
-            }
-        }
+    if (wave_index >= MAX_LEVELS) {
+        wave_index = MAX_LEVELS - 1;
     }
-    
-    return 0;
-}
 
-// Enhanced collision check that includes partial brick logic
-UINT8 CheckCustomTileCollision(Sprite* sprite, INT16 dx, INT16 dy) {
-    // First check the standard collision (full brick tiles)
-    UINT8 tile_x = (sprite->x + dx) >> 3;
-    UINT8 tile_y = (sprite->y + dy) >> 3;
-    
-    // Check bounds
-    if (tile_x >= scroll_tiles_w || tile_y >= scroll_tiles_h) {
-        return 0;
-    }
-    
-    // Get the tile type
-    UINT8 tile = GetScrollTile(tile_x, tile_y);
-    
-    // Check if it's a full brick tile (index 1)
-    if (tile == TILE_FULL_BRICK) {
-        return 1; // Collision detected
-    }
-    
-    // Check for partial brick collision
-    if (CheckPartialBrickCollision(sprite, dx, dy)) {
-        return 1;
-    }
-    
-    // Return 0 for empty space and other non-collision tiles
-    return 0;
+    current_level = wave_index + 1;
+    enemies_to_spawn = level_lengths[wave_index];
+    enemies_left_to_spawn = enemies_to_spawn;
+    enemies_killed = 0;
+    spawn_timer = ENEMY_SPAWN_DELAY;
+    enemy_spawn_index = 0;
 }
 
 void SpawnEnemies() {
      if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
         if (--spawn_timer == 0) {
             UINT8 x, y;
-            GetRandomSpawnPosition(&x, &y);
+            GetRandomSpawnPositionFromTable(&x, &y);
 
             UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
 
@@ -204,14 +114,19 @@ void SpawnEnemies() {
                 case ENEMY_TYPE_TANK:
                     virus = SpriteManagerAdd(TankVirus, x, y);
                     break;
+                case ENEMY_TYPE_BOMBER:
+                    virus = SpriteManagerAdd(BomberVirus, x, y);
+                    break;
+                case ENEMY_TYPE_CHARGE:
+                    virus = SpriteManagerAdd(ChargeVirus, x, y);
+                    break;
             }
 
             if (virus) {
-                if (type == ENEMY_TYPE_TANK) {
-                    virus->custom_data[CD_ENEMY_HEALTH] = 5;
-                } else {
-                    virus->custom_data[CD_ENEMY_HEALTH] = 3;
-                }
+                // Base HP +1 per level above 1 (room waves bump current_level)
+                UINT8 base_health = (type == ENEMY_TYPE_TANK) ? 5 : 3;
+                UINT8 level_bonus = (current_level > 1) ? (current_level - 1) : 0;
+                virus->custom_data[CD_ENEMY_HEALTH] = base_health + level_bonus;
             }
 
             enemies_left_to_spawn--;
@@ -241,22 +156,7 @@ void CheckForNextLevel() {
         spawn_timer = ENEMY_SPAWN_DELAY;
         enemy_spawn_index = 0;
         
-        // Update door cost for next level
-        UINT8 i;
-        Sprite* spr;
-        // Ensure spawn points are still present for next level
-        UINT8 spawn_point_count = 0;
-        SPRITEMANAGER_ITERATE(i, spr) {
-            if (spr->type == SpawnPoint) {
-                spawn_point_count++;
-            }
-        }
-        
-        // If spawn points are missing, recreate them
-        if (spawn_point_count < 2) {
-            SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
-            SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
-        }
+        EnsureRoomSpawnPointsFromTable();
     }
 }
 
@@ -264,50 +164,33 @@ void CheckForNextLevel() {
 void LoadLevel(UINT8 level) {
     if (level >= MAX_LEVELS) level = MAX_LEVELS - 1;
 
-    // Clear all existing sprites first
-    SpriteManagerReset();
-    
-    // Spawn a new player
-    scroll_target = SpriteManagerAdd(SpritePlayer, 90, 50);
-    
-    // Spawn a Door to the right of the player
-    Sprite* door = SpriteManagerAdd(Door, 115, 52); // x=120, y=50
-    if (door) {
-        door->custom_data[CD_DOOR_STATE] = 0; // Closed
-        door->custom_data[CD_DOOR_COST] = 10; // Cost in Ready Coins (custom property)
-    }
-    
-    // Spawn the two spawn point sprites
-    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
-    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
-
-    enemies_to_spawn = level_lengths[level - 1];
-    enemies_left_to_spawn = enemies_to_spawn;
-    spawn_timer = ENEMY_SPAWN_DELAY;
-    enemy_spawn_index = 0;
+    SpawnRoomFromTable(0);
+    current_level = level;
+    StartRoomEnemyWave();
 
     DPRINT_POS(0, 0);
     DPrintf("       Level %d      ", current_level);
 }
 
 void START() {
-    // Only full brick tile (index 1) has collision
-    // Empty space (index 0) and partial bricks (index 2, 3) will be handled with custom collision
-    UINT8 collision_tiles[] = { 1, 0 };
-    InitScroll(BANK(map), &map, collision_tiles, 0);
+    scroll_target = NULL;
+    last_tile_loaded = 0;
+    last_bg_pal_loaded = 0;
+    scroll_offset_x = 0;
+    scroll_offset_y = 0;
+    current_room = 0;
 
-    INIT_CONSOLE(font, 2); // Increase console height to 2 lines
+    InitRoomScrollFromTable(0);
+
+    INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 0);
     DPrintf("       Level %d      ", current_level);
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d", ready_coins);
+    DPrintf("Ready Coins: %d       ", ready_coins);
+
+    initarand(DIV_REG);
     PlayMusic(track1, LOOP);
-    
-    // Spawn the two spawn point sprites
-    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_1_X, SPAWN_POINT_1_Y);
-    SpriteManagerAdd(SpawnPoint, SPAWN_POINT_2_X, SPAWN_POINT_2_Y);
-    
-    // Load the initial level (this will spawn the player and door)
+    waiting_for_start = 0;
     LoadLevel(current_level);
 }
 
@@ -334,7 +217,9 @@ void CheckForPlayerDeath() {
         spawn_timer = ENEMY_SPAWN_DELAY;
         enemy_spawn_index = 0;
         current_level = 1;
+        current_room = 0;
         ready_coins = 0;
+        player_electric_attack = 0;
         
         // Clear the screen and show restart message
         DPRINT_POS(0, 0);
@@ -361,6 +246,43 @@ void UPDATE() {
     // If waiting for restart, don't continue with game logic
     if(waiting_for_start) {
         return;
+    }
+
+    if (pending_room_transition) {
+        UINT8 next_room = current_room + 1;
+
+        pending_room_transition = 0;
+
+        if (next_room >= room_count) {
+            return;
+        }
+
+        DISPLAY_OFF;
+        wait_vbl_done();
+
+        LoadRoomFromTable(next_room);
+
+        wait_vbl_done();
+        scroll_x_vblank = scroll_x;
+        scroll_y_vblank = scroll_y;
+        SCX_REG = scroll_x_vblank + (scroll_offset_x << 3);
+        SCY_REG = scroll_y_vblank + (scroll_offset_y << 3);
+        DISPLAY_ON;
+
+        SyncGameHud();
+        StartRoomEnemyWave();
+        DPRINT_POS(0, 0);
+        DPrintf("       Level %d      ", current_level);
+        return;
+    }
+
+    if (pending_electric_pickup) {
+        pending_electric_pickup = 0;
+        player_electric_attack = 1;
+        if (scroll_target) {
+            scroll_target->custom_data[CD_PLAYER_ELECTRIC] = 1;
+        }
+        PlayCoinCollectSound();
     }
 
     DPRINT_POS(0, 1);

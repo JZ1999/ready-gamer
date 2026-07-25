@@ -4,6 +4,7 @@
 #include "ZGBMain.h"
 #include "SpriteData.h"
 #include "SoundEffects.h"
+#include "StateGame.h"
 
 #define MAX_SPRITES 20
 
@@ -19,7 +20,11 @@
 extern UINT8 enemies_killed;
 extern UINT16 ready_coins;
 
-void KillVirus(UINT8 virus_id) {
+void KillVirus(Sprite* virus, UINT8 virus_id) {
+    if (virus && virus->type == BomberVirus) {
+        SpriteManagerAdd(Bomb, virus->x, virus->y);
+    }
+
     ++enemies_killed;
     ++ready_coins; // Each enemy gives 1 Ready Coin
     PlayCoinCollectSound(); // Play coin collection sound
@@ -58,10 +63,10 @@ void START() {
 void UPDATE() {
     // Movement based on direction
     switch(THIS->custom_data[CD_DIR]) {
-        case 0: TranslateSprite(THIS, 0, -1); break; // Up
-        case 1: TranslateSprite(THIS, 0, 1); break;  // Down
-        case 2: TranslateSprite(THIS, -1, 0); break; // Left
-        case 3: TranslateSprite(THIS, 1, 0); break;  // Right
+        case 0: SafeTranslateSprite(THIS, 0, -1); break; // Up
+        case 1: SafeTranslateSprite(THIS, 0, 1); break;  // Down
+        case 2: SafeTranslateSprite(THIS, -1, 0); break; // Left
+        case 3: SafeTranslateSprite(THIS, 1, 0); break;  // Right
     }
 
     // === ENEMY COLLISION ===
@@ -70,16 +75,23 @@ void UPDATE() {
     SPRITEMANAGER_ITERATE(i, spr) {
 		if (IsEnemyType(spr->type)) {
 			if (CheckCollision(THIS, spr)) {
-                if(spr->custom_data[CD_ENEMY_HEALTH] > 1) {
-                    spr->custom_data[CD_ENEMY_HEALTH]--;
+                if(spr->custom_data[CD_ENEMY_HEALTH] > PROJECTILE_DAMAGE_NORMAL) {
+                    spr->custom_data[CD_ENEMY_HEALTH] -= PROJECTILE_DAMAGE_NORMAL;
                     spr->custom_data[CD_BLINK_TIMER] = 10; // Set hit feedback timer (higher value for more visible effect)
                     PlayEnemyHitSound(); // Play hit sound
                 } else {
                     UINT8 virus_id = i;
-                    KillVirus(virus_id);
+                    KillVirus(spr, virus_id);
                     PlayEnemyHitSound(); // Play hit sound
                 }
                 SpriteManagerRemove(THIS_IDX); // Remove bullet
+                return;
+			}
+		}
+		if (spr->type == Bomb) {
+			if (CheckCollision(THIS, spr)) {
+                SpriteManagerRemove(i);       // Defuse bomb
+                SpriteManagerRemove(THIS_IDX); // Remove screw
                 return;
 			}
 		}

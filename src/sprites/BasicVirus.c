@@ -24,6 +24,9 @@ void START() {
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 3;
     THIS->custom_data[CD_MOVE_TIMER] = 0;
+    /* Keep alive off-camera (default lim 32 culls on wide maps). */
+    THIS->lim_x = 255;
+    THIS->lim_y = 255;
 }
 
 void UPDATE() {

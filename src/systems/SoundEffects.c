@@ -15,7 +15,7 @@ static UINT8 enemy_hit_melody_active = 0;
  * Plays the screw shot sound effect
  * Uses Channel 1 with a short, sharp sound appropriate for projectile firing
  */
-void PlayScrewShotSound(void) {
+void PlayScrewShotSound(void) BANKED {
     // Channel 1: Square wave with envelope for a sharp "pew" sound
     // NR10: Sweep (disabled)
     // NR11: Length and duty cycle (50% duty, short length)
@@ -35,7 +35,7 @@ void PlayScrewShotSound(void) {
  * Plays the enemy hit sound effect
  * Uses the new low-frequency melody system for better impact feel
  */
-void PlayEnemyHitSound(void) {
+void PlayEnemyHitSound(void) BANKED {
     PlayEnemyHitMelody(); // Use the new melody system
 }
 
@@ -85,7 +85,7 @@ static void PlayDoorMelodyNote(UINT8 note_index) {
 /**
  * Starts the door opening melody sequence
  */
-void PlayDoorOpeningMelody(void) {
+void PlayDoorOpeningMelody(void) BANKED {
     door_melody_active = 1;
     door_melody_timer = DOOR_MELODY_NOTE_DURATION;
     door_melody_note_index = 0;
@@ -95,7 +95,7 @@ void PlayDoorOpeningMelody(void) {
 /**
  * Updates the door opening melody (call this in UPDATE function)
  */
-void UpdateDoorOpeningMelody(void) {
+void UpdateDoorOpeningMelody(void) BANKED {
     if (!door_melody_active) return;
     
     if (--door_melody_timer == 0) {
@@ -113,7 +113,7 @@ void UpdateDoorOpeningMelody(void) {
 /**
  * Legacy door opening sound (kept for compatibility)
  */
-void PlayDoorOpenSound(void) {
+void PlayDoorOpenSound(void) BANKED {
     PlayDoorOpeningMelody(); // Use the new melody system
 }
 
@@ -121,7 +121,7 @@ void PlayDoorOpenSound(void) {
  * Plays the coin collection sound effect
  * Uses Channel 4 (noise) for a distinctive coin sound
  */
-void PlayCoinCollectSound(void) {
+void PlayCoinCollectSound(void) BANKED {
     // Channel 4: Noise channel for a distinctive coin sound
     PlayFx(CHANNEL_4, COIN_COLLECT_MUTE_FRAMES,
            0x00,   // NR41: Length
@@ -167,7 +167,7 @@ static void PlayEnemyHitMelodyNote(UINT8 note_index) {
 /**
  * Starts the enemy hit melody sequence
  */
-void PlayEnemyHitMelody(void) {
+void PlayEnemyHitMelody(void) BANKED {
     enemy_hit_melody_active = 1;
     enemy_hit_melody_timer = ENEMY_HIT_MELODY_NOTE_DURATION;
     enemy_hit_melody_note_index = 0;
@@ -177,7 +177,7 @@ void PlayEnemyHitMelody(void) {
 /**
  * Updates the enemy hit melody (call this in UPDATE function)
  */
-void UpdateEnemyHitMelody(void) {
+void UpdateEnemyHitMelody(void) BANKED {
     if (!enemy_hit_melody_active) return;
     
     if (--enemy_hit_melody_timer == 0) {

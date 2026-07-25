@@ -6,19 +6,37 @@
 #include "Scroll.h"
 #include "Keys.h"
 #include "Music.h"
-#include "Music.h"
+#include "SpriteManager.h"
 #include "Print.h"
 
 IMPORT_MAP(GameOvermap);
 IMPORT_TILES(MenuTileset);
+IMPORT_TILES(font);
 
 DECLARE_MUSIC(gameover);
 
-void START() {
-	INIT_BKG(GameOvermap);
+extern INT8 scroll_h_border;
 
-  DPRINT_POS(0, 0);
-  DPrintf("GAME OVER");
+void START() {
+	HIDE_WIN;
+	SetWindowY(144);
+	scroll_h_border = 0;
+	scroll_offset_x = 0;
+	scroll_offset_y = 0;
+	scroll_target = 0;
+
+	SpriteManagerReset();
+
+	/* Frame border from MenuTileset (only shared tiles that still match). */
+	InitScrollWithTiles(BANK(GameOvermap), &GameOvermap, BANK(MenuTileset), &MenuTileset, 0, 0);
+
+	/* Text is drawn with the game font — old center art no longer exists in MenuTileset. */
+	INIT_FONT(font, PRINT_BKG);
+	PRINT(5, 7, "GAME OVER");
+	PRINT(6, 10, "PRESS A");
+
+	SHOW_BKG;
+	HIDE_SPRITES;
 
 	PlayMusic(gameover, 0);
 }

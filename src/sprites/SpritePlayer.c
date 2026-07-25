@@ -7,30 +7,81 @@
 #include "SpriteData.h"
 #include "Print.h"
 #include "SoundEffects.h"
+#include "Scroll.h"
+#include "Math.h"
+#include "StateGame.h"
 
 Direction player_direction;
 
-extern UINT16 ready_coins; // Player's currency
+extern UINT16 ready_coins;
+UINT8 player_electric_attack = 0;
 
-#define SHOOT_COOLDOWN       100  // Adjust for how many frames between shots
+#define SHOOT_COOLDOWN       100
 #define PLAYER_MAX_HEALTH    1
-#define CD_PLAYER_HEALTH     0
-#define CD_INVINCIBILITY     1
 #define INVINCIBILITY_FRAMES 60
+#define WALK_ANIM_SPEED      8
+
+#define PLAYER_FRAME_IDLE        0
+#define PLAYER_FRAME_UP          1
+#define PLAYER_FRAME_DOWN        2
+#define PLAYER_FRAME_WALK_DOWN_A 3
+#define PLAYER_FRAME_WALK_DOWN_B 4
+#define PLAYER_FRAME_WALK_UP_A   5
+#define PLAYER_FRAME_WALK_UP_B   6
+#define PLAYER_FRAME_WALK_SIDE_A 7
+#define PLAYER_FRAME_WALK_SIDE_B 8
 
 UINT8 shoot_cooldown;
 
-// Custom movement function that checks for partial brick collisions
-static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
-    // First check if the movement would collide with a partial brick
-    extern UINT8 CheckCustomTileCollision(Sprite* sprite, INT16 dx, INT16 dy);
-    
-    if (CheckCustomTileCollision(sprite, x, y)) {
-        return 1; // Collision detected
+static void SetPlayerIdleFrame(void) {
+    switch (player_direction) {
+        case DIR_UP:
+            THIS->mirror = NO_MIRROR;
+            SetFrame(THIS, PLAYER_FRAME_UP);
+            break;
+        case DIR_DOWN:
+            THIS->mirror = NO_MIRROR;
+            SetFrame(THIS, PLAYER_FRAME_DOWN);
+            break;
+        case DIR_RIGHT:
+            THIS->mirror = V_MIRROR;
+            SetFrame(THIS, PLAYER_FRAME_IDLE);
+            break;
+        default:
+            THIS->mirror = NO_MIRROR;
+            SetFrame(THIS, PLAYER_FRAME_IDLE);
+            break;
     }
-    
-    // If no custom collision, use the standard TranslateSprite
-    return TranslateSprite(sprite, x, y);
+}
+
+static void SetPlayerWalkFrame(void) {
+    UINT8 step = (THIS->custom_data[CD_WALK_TIMER] / WALK_ANIM_SPEED) & 1;
+    UINT8 walk_down_frame = step ? PLAYER_FRAME_WALK_DOWN_B : PLAYER_FRAME_WALK_DOWN_A;
+    UINT8 walk_side_frame = step ? PLAYER_FRAME_WALK_SIDE_B : PLAYER_FRAME_WALK_SIDE_A;
+
+    switch (player_direction) {
+        case DIR_UP:
+            THIS->mirror = NO_MIRROR;
+            SetFrame(THIS, step ? PLAYER_FRAME_WALK_UP_B : PLAYER_FRAME_WALK_UP_A);
+            break;
+        case DIR_DOWN:
+            THIS->mirror = NO_MIRROR;
+            SetFrame(THIS, walk_down_frame);
+            break;
+        case DIR_RIGHT:
+            THIS->mirror = V_MIRROR;
+            SetFrame(THIS, walk_side_frame);
+            break;
+        default:
+            THIS->mirror = NO_MIRROR;
+            SetFrame(THIS, walk_side_frame);
+            break;
+    }
+}
+
+// Custom movement using GetScrollTile (safe across ROM banks)
+static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
+    return SafeTranslateSprite(sprite, x, y);
 }
 
 // Helper function to check for closed door collision
@@ -142,6 +193,8 @@ void START() {
 
     THIS->custom_data[CD_PLAYER_HEALTH] = PLAYER_MAX_HEALTH;
     THIS->custom_data[CD_INVINCIBILITY] = 0;
+    THIS->custom_data[CD_WALK_TIMER] = 0;
+    THIS->custom_data[CD_PLAYER_ELECTRIC] = player_electric_attack;
 }
 
 void UPDATE() {
@@ -163,47 +216,52 @@ void UPDATE() {
     SPRITEMANAGER_ITERATE(i, spr) {
         if (CheckCollision(THIS, spr)) {
             // Handle enemy collisions
-            if (spr->type == BasicVirus || spr->type == SpeedVirus) {
+            if (IsEnemyType(spr->type)) {
                 TakeDamage(THIS);
                 break; // Only damage once per frame
             }
         }
     }
 
+    UINT8 moved = 0;
+
     if(KEY_PRESSED(J_UP)) {
-        if (!CollidesWithClosedDoor(THIS, 0, -1)) {
-            CustomTranslateSprite(THIS, 0, -1);
+        if (!CollidesWithClosedDoor(THIS, 0, -1) && !CustomTranslateSprite(THIS, 0, -1)) {
+            moved = 1;
         }
-        SetFrame(THIS, 1);
         player_direction = DIR_UP;
     } 
     if(KEY_PRESSED(J_DOWN)) {
-        if (!CollidesWithClosedDoor(THIS, 0, 1)) {
-            CustomTranslateSprite(THIS, 0, 1);
+        if (!CollidesWithClosedDoor(THIS, 0, 1) && !CustomTranslateSprite(THIS, 0, 1)) {
+            moved = 1;
         }
-        SetFrame(THIS, 2);
         player_direction = DIR_DOWN;
     }
     if(KEY_PRESSED(J_LEFT)) {
-        if (!CollidesWithClosedDoor(THIS, -1, 0)) {
-            CustomTranslateSprite(THIS, -1, 0);
+        if (!CollidesWithClosedDoor(THIS, -1, 0) && !CustomTranslateSprite(THIS, -1, 0)) {
+            moved = 1;
         }
-        THIS->mirror = NO_MIRROR;
-        SetFrame(THIS, 0);
         player_direction = DIR_LEFT;
     }
     if(KEY_PRESSED(J_RIGHT)) {
-        if (!CollidesWithClosedDoor(THIS, 1, 0)) {
-            CustomTranslateSprite(THIS, 1, 0);
+        if (!CollidesWithClosedDoor(THIS, 1, 0) && !CustomTranslateSprite(THIS, 1, 0)) {
+            moved = 1;
         }
-        THIS->mirror = V_MIRROR;
-        SetFrame(THIS, 0);
         player_direction = DIR_RIGHT;
     }
 
+    if (moved) {
+        THIS->custom_data[CD_WALK_TIMER]++;
+        SetPlayerWalkFrame();
+    } else {
+        SetPlayerIdleFrame();
+    }
+
 	if(KEY_PRESSED(J_B) && shoot_cooldown == 0) {
-        Sprite* screw = SpriteManagerAddEx(SpriteScrew, THIS->x, THIS->y, (UINT8)player_direction);
-        screw->custom_data[CD_DIR] = (UINT8)player_direction;
+        UINT8 projectile_type = THIS->custom_data[CD_PLAYER_ELECTRIC] ? ElectricProjectile : SpriteScrew;
+        Sprite* projectile = SpriteManagerAddEx(projectile_type, THIS->x, THIS->y, (UINT8)player_direction);
+
+        projectile->custom_data[CD_DIR] = (UINT8)player_direction;
         shoot_cooldown = SHOOT_COOLDOWN;
         PlayScrewShotSound();
     }

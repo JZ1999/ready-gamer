@@ -16,6 +16,10 @@ void START() {
     // Spawn points should not have collision
     THIS->coll_w = 0;
     THIS->coll_h = 0;
+
+    /* Persist on wide maps where spawners start off-camera. */
+    THIS->lim_x = 255;
+    THIS->lim_y = 255;
 }
 
 void UPDATE() {
