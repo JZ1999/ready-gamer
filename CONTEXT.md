@@ -60,14 +60,17 @@ Exit alcove / portal path was previously blocked by pillars; map geometry was pa
 
 ## Combat & enemies
 
-Spawn table in `StateGame.c` (`level_spawns` / `level_lengths`):
+Spawn table in `StateGame.c` (`level_spawns` / `level_lengths`, **20 waves**):
 
-| Level (1-based) | Introduces / composition |
-|-----------------|--------------------------|
-| 1 | BasicVirus only |
-| 2+ | BomberVirus (plus Basic/Speed) |
-| 3+ | ChargeVirus |
-| 4–6 | Mix including TankVirus |
+| Levels | Introduces / feel |
+|--------|-------------------|
+| 1–3 | Basics (+ Speed) |
+| 4–5 | BomberVirus |
+| 6–7 | ChargeVirus |
+| 8–9 | TankVirus |
+| 10–20 | Full mix; pack size and elites ramp up |
+
+After wave 20, `current_level` wraps to 1. Clearing the portal in the **last room** (`map5`) enters `StateWin` (raffle code UI).
 
 Sprites (`ZGBMain.h` ↔ gfx basename):
 
@@ -92,6 +95,6 @@ Sprites (`ZGBMain.h` ↔ gfx basename):
 
 1. Build `READY_GAMER_Debug.gb` (or release).
 2. In `buy-games` admin: Flash Game `ready-gamer`, embed Game Boy, upload ROM (+ JPG thumb).
-3. Arcade (`readygames-flash`) loads `embed_type === 'gameboy'` via EmulatorJS; `play_url` is the media ROM URL from the API.
+3. Arcade (`readygames-flash`) loads `embed_type === 'gameboy'` via EmulatorJS; `play_url` must be the Django `/api/flash-games/<slug>/rom/` proxy (raw private S3 signed URLs fail CORS from Vercel).
 
 See also: `readygames-flash/CONTEXT.md` and `buy-games` `flash_games` app (`rom_file`, migration `0003_flashgame_gameboy_rom`).

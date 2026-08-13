@@ -28,7 +28,7 @@
 
 // Max enemies per level
 #define MAX_ENEMIES_PER_LEVEL 10
-#define MAX_LEVELS 6
+#define MAX_LEVELS 20
 
 
 IMPORT_TILES(font);
@@ -57,20 +57,47 @@ UINT8 pending_electric_pickup = 0;
 
 UINT16 ready_coins = 0; // Player's currency
 
+/*
+ * 20 wave tables — difficulty ramps by count + enemy mix.
+ * After level 20, CheckForNextLevel wraps back to 1.
+ */
 const UINT8 level_spawns[MAX_LEVELS][MAX_ENEMIES_PER_LEVEL] = {
-    /* Level 1: basics only */
+    /* 1–3: tutorial / basics */
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
-    /* Level 2+: BomberVirus introduced */
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
+    {ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
+    /* 4–5: Bomber enters */
     {ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER},
-    /* Level 3+: ChargeVirus introduced */
+    {ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BASIC, ENEMY_TYPE_BASIC},
+    /* 6–7: Charge enters */
     {ENEMY_TYPE_CHARGE, ENEMY_TYPE_BASIC, ENEMY_TYPE_BOMBER},
-    {ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC, ENEMY_TYPE_TANK},
-    {ENEMY_TYPE_TANK, ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED},
-    {ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED, ENEMY_TYPE_CHARGE, ENEMY_TYPE_TANK}
+    {ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BASIC},
+    /* 8–9: Tank enters */
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_BASIC, ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED},
+    /* 10–12: full roster, growing packs */
+    {ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_TANK, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER},
+    {ENEMY_TYPE_CHARGE, ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED},
+    /* 13–15: heavier elites */
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED, ENEMY_TYPE_TANK},
+    {ENEMY_TYPE_CHARGE, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BOMBER, ENEMY_TYPE_TANK, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_TANK, ENEMY_TYPE_SPEED, ENEMY_TYPE_CHARGE},
+    /* 16–18: dense pressure */
+    {ENEMY_TYPE_BOMBER, ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_SPEED, ENEMY_TYPE_BOMBER, ENEMY_TYPE_TANK},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED},
+    {ENEMY_TYPE_CHARGE, ENEMY_TYPE_TANK, ENEMY_TYPE_BOMBER, ENEMY_TYPE_CHARGE, ENEMY_TYPE_TANK, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED},
+    /* 19–20: climax (then loops to 1) */
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED, ENEMY_TYPE_BASIC},
+    {ENEMY_TYPE_TANK, ENEMY_TYPE_TANK, ENEMY_TYPE_CHARGE, ENEMY_TYPE_CHARGE, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BOMBER, ENEMY_TYPE_BOMBER, ENEMY_TYPE_SPEED, ENEMY_TYPE_SPEED}
 };
 
-// How many enemies each level has
-const UINT8 level_lengths[MAX_LEVELS] = {2, 3, 3, 5, 4, 4};
+const UINT8 level_lengths[MAX_LEVELS] = {
+    2, 3, 3, 3, 4,
+    3, 4, 4, 4, 5,
+    5, 5, 5, 6, 6,
+    6, 7, 7, 8, 9
+};
 UINT8 enemy_spawn_index = 0;
 
 void SyncGameHud(void) {
@@ -79,14 +106,20 @@ void SyncGameHud(void) {
     DPrintf("Ready Coins: %d       ", ready_coins);
 }
 
-void StartRoomEnemyWave(void) {
-    UINT8 wave_index = current_room;
-
-    if (wave_index >= MAX_LEVELS) {
-        wave_index = MAX_LEVELS - 1;
+static void ClampLevel(void) {
+    if (current_level < 1) {
+        current_level = 1;
     }
+    while (current_level > MAX_LEVELS) {
+        current_level -= MAX_LEVELS;
+    }
+}
 
-    current_level = wave_index + 1;
+void StartRoomEnemyWave(void) {
+    UINT8 wave_index;
+
+    ClampLevel();
+    wave_index = current_level - 1;
     enemies_to_spawn = level_lengths[wave_index];
     enemies_left_to_spawn = enemies_to_spawn;
     enemies_killed = 0;
@@ -123,9 +156,12 @@ void SpawnEnemies() {
             }
 
             if (virus) {
-                // Base HP +1 per level above 1 (room waves bump current_level)
+                /* Gentle HP ramp across 20 looping levels (cap +6). */
                 UINT8 base_health = (type == ENEMY_TYPE_TANK) ? 5 : 3;
-                UINT8 level_bonus = (current_level > 1) ? (current_level - 1) : 0;
+                UINT8 level_bonus = (current_level > 1) ? ((current_level - 1) / 3) : 0;
+                if (level_bonus > 6) {
+                    level_bonus = 6;
+                }
                 virus->custom_data[CD_ENEMY_HEALTH] = base_health + level_bonus;
             }
 
@@ -145,27 +181,23 @@ void CheckForNextLevel() {
         next_round_timer = NEXT_ROUND_TIMER; // reset timer
 
         current_level++;
-        
-        // Update level display and reset enemy spawning for next level
+        if (current_level > MAX_LEVELS) {
+            current_level = 1; /* loop waves forever until rooms are cleared */
+        }
+
         DPRINT_POS(0, 0);
         DPrintf("       Level %d      ", current_level);
-        
-        enemies_to_spawn = level_lengths[current_level - 1];
-        enemies_left_to_spawn = enemies_to_spawn;
-        enemies_killed = 0;
-        spawn_timer = ENEMY_SPAWN_DELAY;
-        enemy_spawn_index = 0;
-        
+
+        StartRoomEnemyWave();
         EnsureRoomSpawnPointsFromTable();
     }
 }
 
 
 void LoadLevel(UINT8 level) {
-    if (level >= MAX_LEVELS) level = MAX_LEVELS - 1;
-
     SpawnRoomFromTable(0);
     current_level = level;
+    ClampLevel();
     StartRoomEnemyWave();
 
     DPRINT_POS(0, 0);
@@ -179,6 +211,11 @@ void START() {
     scroll_offset_x = 0;
     scroll_offset_y = 0;
     current_room = 0;
+    current_level = 1;
+    ready_coins = 0;
+    player_electric_attack = 0;
+    pending_room_transition = 0;
+    pending_electric_pickup = 0;
 
     InitRoomScrollFromTable(0);
 
@@ -254,6 +291,8 @@ void UPDATE() {
         pending_room_transition = 0;
 
         if (next_room >= room_count) {
+            /* Cleared final room portal → win / raffle screen */
+            SetState(StateWin);
             return;
         }
 
@@ -270,6 +309,11 @@ void UPDATE() {
         DISPLAY_ON;
 
         SyncGameHud();
+        /* Keep wave progression across rooms; bump one tier on room entry. */
+        current_level++;
+        if (current_level > MAX_LEVELS) {
+            current_level = 1;
+        }
         StartRoomEnemyWave();
         DPRINT_POS(0, 0);
         DPrintf("       Level %d      ", current_level);

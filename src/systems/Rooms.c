@@ -67,7 +67,7 @@ struct RoomDef {
 #define ROOM_MAP(MAP) { BANK(MAP), &MAP }
 
 static const DoorPlacement room0_doors[] = {
-    { 115, 52, 1 },
+    { 115, 52, 10 },
 };
 
 static const SpawnPointPlacement room0_spawns[] = {
@@ -80,8 +80,8 @@ static const PortalPlacement room0_portals[] = {
 };
 
 static const DoorPlacement room1_doors[] = {
-    { 115, 52, 1 },
-    { 115, 100, 1 },
+    { 115, 52, 10 },
+    { 115, 100, 10 },
 };
 
 static const SpawnPointPlacement room1_spawns[] = {
@@ -99,7 +99,7 @@ static const PickupPlacement room1_electricity[] = {
 };
 
 static const DoorPlacement room2_doors[] = {
-    { 115, 52, 1 },
+    { 115, 52, 10 },
 };
 
 static const SpawnPointPlacement room2_spawns[] = {
@@ -117,7 +117,7 @@ static const PickupPlacement room2_coins[] = {
 };
 
 static const DoorPlacement room3_doors[] = {
-    { 232, 24, 1 },
+    { 232, 24, 10 },
 };
 
 static const SpawnPointPlacement room3_spawns[] = {
@@ -132,7 +132,7 @@ static const PortalPlacement room3_portals[] = {
 };
 
 static const DoorPlacement room4_doors[] = {
-    { 264, 24, 1 },
+    { 264, 24, 10 },
 };
 
 static const SpawnPointPlacement room4_spawns[] = {
@@ -140,6 +140,11 @@ static const SpawnPointPlacement room4_spawns[] = {
     { 160, 40 },
     { 240, 112 },
     { 80, 64 },
+};
+
+/* Exit portal past the door — triggers You Win when leaving the last room. */
+static const PortalPlacement room4_portals[] = {
+    { 280, 24 },
 };
 
 static const PickupPlacement room4_coins[] = {
@@ -196,7 +201,7 @@ static const RoomDef rooms[MAX_ROOMS] = {
         48, 120,
         room4_doors, ARRAY_LEN(room4_doors),
         room4_spawns, ARRAY_LEN(room4_spawns),
-        NULL, 0,
+        room4_portals, ARRAY_LEN(room4_portals),
         NULL, 0,
         room4_coins, ARRAY_LEN(room4_coins),
     },

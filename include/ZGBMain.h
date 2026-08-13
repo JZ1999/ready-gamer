@@ -9,6 +9,7 @@
 _STATE(StateMenu)\
 _STATE(StateGame)\
 _STATE(StateGameOver)\
+_STATE(StateWin)\
 STATE_DEF_END
 
 #define SPRITES \
