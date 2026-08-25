@@ -131,6 +131,19 @@ void PlayCoinCollectSound(void) BANKED {
 }
 
 /**
+ * Plays the player-hit sound effect (life lost / damage taken)
+ * Low descending square tone — deliberately harsher/lower than the enemy-hit
+ * sound so a player hit reads as distinct from landing a hit on an enemy.
+ */
+void PlayPlayerHitSound(void) BANKED {
+    PlayFx(CHANNEL_2, PLAYER_HIT_MUTE_FRAMES,
+           0x00,   // NR21: 50% duty, length
+           0x84,   // NR22: Volume 8, envelope down, step 4 (longer fade)
+           0x10,   // NR23: Frequency low (low pitch)
+           0x87);  // NR24: Frequency high, restart sound
+}
+
+/**
  * Plays a single note of the enemy hit melody
  * Uses very low frequencies for impact feel
  */

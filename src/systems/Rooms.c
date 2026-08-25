@@ -31,11 +31,19 @@ typedef struct {
     UINT16 x;
     UINT16 y;
     UINT8 cost;
+    /* Indices into this room's spawn_points[] that this door unlocks when
+     * opened. NULL/0 = door doesn't gate spawns at all (existing behavior,
+     * every spawn point stays usable regardless of door state). */
+    const UINT8* unlock_spawn_indices;
+    UINT8 unlock_spawn_count;
 } DoorPlacement;
 
 typedef struct {
     UINT16 x;
     UINT16 y;
+    /* 1 = this spawn starts locked (excluded from GetRandomSpawnPosition)
+     * until a door that lists it in its unlock_spawn_indices opens. */
+    UINT8 initially_locked;
 } SpawnPointPlacement;
 
 typedef struct {
@@ -67,12 +75,12 @@ struct RoomDef {
 #define ROOM_MAP(MAP) { BANK(MAP), &MAP }
 
 static const DoorPlacement room0_doors[] = {
-    { 115, 52, 10 },
+    { 115, 52, 10, NULL, 0 },
 };
 
 static const SpawnPointPlacement room0_spawns[] = {
-    { 20, 20 },
-    { 100, 80 },
+    { 20, 20, 0 },
+    { 100, 80, 0 },
 };
 
 static const PortalPlacement room0_portals[] = {
@@ -80,14 +88,14 @@ static const PortalPlacement room0_portals[] = {
 };
 
 static const DoorPlacement room1_doors[] = {
-    { 115, 52, 10 },
-    { 115, 100, 10 },
+    { 115, 52, 10, NULL, 0 },
+    { 115, 100, 10, NULL, 0 },
 };
 
 static const SpawnPointPlacement room1_spawns[] = {
-    { 20, 25 },
-    { 100, 80 },
-    { 50, 90 },
+    { 20, 25, 0 },
+    { 100, 80, 0 },
+    { 50, 90, 0 },
 };
 
 static const PortalPlacement room1_portals[] = {
@@ -99,13 +107,13 @@ static const PickupPlacement room1_electricity[] = {
 };
 
 static const DoorPlacement room2_doors[] = {
-    { 115, 52, 10 },
+    { 115, 52, 10, NULL, 0 },
 };
 
 static const SpawnPointPlacement room2_spawns[] = {
-    { 20, 20 },
-    { 100, 80 },
-    { 50, 90 },
+    { 20, 20, 0 },
+    { 100, 80, 0 },
+    { 50, 90, 0 },
 };
 
 static const PortalPlacement room2_portals[] = {
@@ -117,38 +125,56 @@ static const PickupPlacement room2_coins[] = {
 };
 
 static const DoorPlacement room3_doors[] = {
-    { 232, 24, 10 },
+    { 232, 24, 10, NULL, 0 },
 };
 
 static const SpawnPointPlacement room3_spawns[] = {
-    { 40, 30 },
-    { 80, 88 },
-    { 200, 112 },
-    { 48, 120 },
+    { 40, 30, 0 },
+    { 80, 88, 0 },
+    { 200, 112, 0 },
+    { 48, 120, 0 },
 };
 
 static const PortalPlacement room3_portals[] = {
     { 280, 24 },
 };
 
+/*
+ * map5 (formerly the room6 draft) layout, from GBMB tile coordinates
+ * (col,row) * 8 = pixels. Explicit progression per the user (overrides the
+ * earlier reachability-based guess — see SESSION_NOTES.md history):
+ *   - Only S1/S2/S3 start unlocked. Everything else starts locked.
+ *   - D3 (bottom-left, right next to player start) is the "first door":
+ *     opening it locks S1/S2/S3 back up and unlocks S5/S7/S8.
+ *   - D1 (top-left) is the "second door": opening it unlocks S4/S6/S9
+ *     (locking everything else, including S5/S7/S8).
+ *   - D2 (top-right) doesn't gate any spawn — it gates the path to the
+ *     portal instead; the portal needs all 3 doors open to be reachable.
+ */
+static const UINT8 room4_door_d3_unlocks[] = { 4, 6, 7 }; /* S5, S7, S8 */
+static const UINT8 room4_door_d1_unlocks[] = { 3, 5, 8 }; /* S4, S6, S9 */
+
 static const DoorPlacement room4_doors[] = {
-    { 264, 24, 10 },
+    { 26 * 8, 1 * 8, 10, room4_door_d1_unlocks, ARRAY_LEN(room4_door_d1_unlocks) }, /* D1 — second */
+    { 38 * 8, 1 * 8, 10, NULL, 0 }, /* D2 — doesn't gate spawns */
+    { 12 * 8, 15 * 8, 10, room4_door_d3_unlocks, ARRAY_LEN(room4_door_d3_unlocks) }, /* D3 — first */
 };
 
 static const SpawnPointPlacement room4_spawns[] = {
-    { 48, 120 },
-    { 160, 40 },
-    { 240, 112 },
-    { 80, 64 },
+    { 6 * 8, 2 * 8, 0 },   /* S1 — unlocked at start, locked once D3 opens */
+    { 9 * 8, 2 * 8, 0 },   /* S2 — unlocked at start, locked once D3 opens */
+    { 3 * 8, 2 * 8, 0 },   /* S3 — unlocked at start, locked once D3 opens */
+    { 35 * 8, 6 * 8, 1 },  /* S4 — locked until D1 opens */
+    { 23 * 8, 6 * 8, 1 },  /* S5 — locked until D3 opens */
+    { 28 * 8, 11 * 8, 1 }, /* S6 — locked until D1 opens */
+    { 23 * 8, 11 * 8, 1 }, /* S7 — locked until D3 opens */
+    { 23 * 8, 15 * 8, 1 }, /* S8 — locked until D3 opens */
+    { 35 * 8, 15 * 8, 1 }, /* S9 — locked until D1 opens */
 };
 
-/* Exit portal past the door — triggers You Win when leaving the last room. */
+/* Exit portal — only reachable once all 3 doors are open. */
 static const PortalPlacement room4_portals[] = {
-    { 280, 24 },
-};
-
-static const PickupPlacement room4_coins[] = {
-    { 144, 64 },
+    { 46 * 8, 15 * 8 },
 };
 
 /*
@@ -198,17 +224,23 @@ static const RoomDef rooms[MAX_ROOMS] = {
     },
     {
         ROOM_MAP(map5),
-        48, 120,
+        3 * 8, 15 * 8,
         room4_doors, ARRAY_LEN(room4_doors),
         room4_spawns, ARRAY_LEN(room4_spawns),
         room4_portals, ARRAY_LEN(room4_portals),
         NULL, 0,
-        room4_coins, ARRAY_LEN(room4_coins),
+        NULL, 0,
     },
 };
 
 UINT8 current_room = 0;
 const UINT8 room_count = 5;
+
+/* Runtime lock state for the current room's spawn points, indexed the same
+ * as that room's spawn_points[] table. Reset on every room load. map5's 9
+ * spawn points are the largest in use today; 10 leaves a little headroom. */
+#define MAX_ROOM_SPAWN_POINTS 10
+static UINT8 spawn_locked[MAX_ROOM_SPAWN_POINTS];
 
 static const RoomDef* GetRoomDef(UINT8 room_index) {
     if (room_index >= room_count) {
@@ -297,9 +329,19 @@ static void SetupRoomEntities(const RoomDef* room) {
     SpawnCoinPickups(room);
 }
 
-void GetRandomSpawnPosition(UINT8* x, UINT8* y) {
+static UINT8 IsSpawnIndexLocked(UINT8 index) {
+    if (index >= MAX_ROOM_SPAWN_POINTS) {
+        return 0; /* out of tracked range — treat as unlocked rather than unusable */
+    }
+    return spawn_locked[index];
+}
+
+void GetRandomSpawnPosition(UINT16* x, UINT16* y) {
     const RoomDef* room = GetCurrentRoom();
     const SpawnPointPlacement* spawn;
+    UINT8 unlocked_indices[MAX_ROOM_SPAWN_POINTS];
+    UINT8 unlocked_count = 0;
+    UINT8 i;
     UINT8 index;
 
     if (room->spawn_point_count == 0) {
@@ -308,10 +350,77 @@ void GetRandomSpawnPosition(UINT8* x, UINT8* y) {
         return;
     }
 
-    index = rand() % room->spawn_point_count;
+    for (i = 0; i != room->spawn_point_count && i != MAX_ROOM_SPAWN_POINTS; ++i) {
+        if (!IsSpawnIndexLocked(i)) {
+            unlocked_indices[unlocked_count] = i;
+            unlocked_count++;
+        }
+    }
+
+    if (unlocked_count == 0) {
+        /* Safety net: a misconfigured door unlock list could lock every
+         * spawn point in the room. Fall back to "all usable" instead of
+         * permanently soft-locking the wave. */
+        index = rand() % room->spawn_point_count;
+    } else {
+        index = unlocked_indices[rand() % unlocked_count];
+    }
+
     spawn = &room->spawn_points[index];
-    *x = (UINT8)spawn->x;
-    *y = (UINT8)spawn->y;
+    *x = spawn->x;
+    *y = spawn->y;
+}
+
+static void ResetRoomSpawnLocks(const RoomDef* room) {
+    UINT8 i;
+    UINT8 count = room->spawn_point_count;
+
+    if (count > MAX_ROOM_SPAWN_POINTS) {
+        count = MAX_ROOM_SPAWN_POINTS;
+    }
+
+    for (i = 0; i != count; ++i) {
+        spawn_locked[i] = room->spawn_points[i].initially_locked;
+    }
+    for (; i != MAX_ROOM_SPAWN_POINTS; ++i) {
+        spawn_locked[i] = 0;
+    }
+}
+
+/**
+ * Called when a door finishes opening. Looks up which DoorPlacement matches
+ * the door's world position; if that door defines an unlock list, spawn
+ * points in the list become unlocked and every other spawn point in the
+ * room is locked. Doors with an empty/NULL list (the default) don't touch
+ * lock state at all, so rooms that don't use this feature are unaffected.
+ */
+void ApplyDoorSpawnUnlocks(UINT16 door_x, UINT16 door_y) {
+    const RoomDef* room = GetCurrentRoom();
+    const DoorPlacement* door = NULL;
+    UINT8 i, j;
+    UINT8 unlocked;
+
+    for (i = 0; i != room->door_count; ++i) {
+        if (room->doors[i].x == door_x && room->doors[i].y == door_y) {
+            door = &room->doors[i];
+            break;
+        }
+    }
+
+    if (door == NULL || door->unlock_spawn_count == 0) {
+        return;
+    }
+
+    for (i = 0; i != room->spawn_point_count && i != MAX_ROOM_SPAWN_POINTS; ++i) {
+        unlocked = 0;
+        for (j = 0; j != door->unlock_spawn_count; ++j) {
+            if (door->unlock_spawn_indices[j] == i) {
+                unlocked = 1;
+                break;
+            }
+        }
+        spawn_locked[i] = unlocked ? 0 : 1;
+    }
 }
 
 void EnsureRoomSpawnPoints(void) {
@@ -363,6 +472,7 @@ void SpawnRoomEntities(UINT8 room_index) {
 
     current_room = room_index;
     SpriteManagerReset();
+    ResetRoomSpawnLocks(room);
     scroll_target = SpriteManagerAdd(SpritePlayer, room->player_x, room->player_y);
     SetupRoomEntities(room);
     FinalizeRoomScroll(room);

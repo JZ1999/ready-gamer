@@ -8,6 +8,7 @@
 #define ENEMY_HIT_MUTE_FRAMES 8
 #define DOOR_OPEN_MUTE_FRAMES 10
 #define COIN_COLLECT_MUTE_FRAMES 6
+#define PLAYER_HIT_MUTE_FRAMES 10
 
 // Door opening melody constants
 #define DOOR_MELODY_NOTE_DURATION 8  // Frames per note
@@ -26,6 +27,7 @@ void PlayScrewShotSound(void) BANKED;
 void PlayEnemyHitSound(void) BANKED;
 void PlayDoorOpenSound(void) BANKED;
 void PlayCoinCollectSound(void) BANKED;
+void PlayPlayerHitSound(void) BANKED;
 void PlayDoorOpeningMelody(void) BANKED;
 void UpdateDoorOpeningMelody(void) BANKED;
 void PlayEnemyHitMelody(void) BANKED;

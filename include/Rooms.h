@@ -13,11 +13,13 @@ extern const UINT8 room_count;
 
 const RoomDef* GetCurrentRoom(void);
 UINT8 GetCurrentRoomSpawnPointCount(void);
-void GetRandomSpawnPosition(UINT8* x, UINT8* y);
+void GetRandomSpawnPosition(UINT16* x, UINT16* y);
 void EnsureRoomSpawnPoints(void);
+void ApplyDoorSpawnUnlocks(UINT16 door_x, UINT16 door_y);
 
-void GetRandomSpawnPositionFromTable(UINT8* x, UINT8* y);
+void GetRandomSpawnPositionFromTable(UINT16* x, UINT16* y);
 void EnsureRoomSpawnPointsFromTable(void);
+void ApplyDoorSpawnUnlocksFromTable(UINT16 door_x, UINT16 door_y);
 
 void InitRoomGraphics(UINT8 room_index);
 void SpawnRoomEntities(UINT8 room_index);

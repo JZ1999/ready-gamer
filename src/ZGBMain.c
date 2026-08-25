@@ -24,7 +24,6 @@ extern const void __bank_Rooms;
 extern UINT8 last_tile_loaded;
 extern UINT8 last_bg_pal_loaded;
 
-#define MAP_TILE_W 40
 #define SCROLL_TILE_REFRESH_H 22
 #define SCROLL_PAD_LEFT 1
 #define SCROLL_PAD_TOP 1
@@ -78,11 +77,11 @@ UINT8 GetRoomTileFromTable(UINT16 x, UINT16 y) {
 	UINT8 tile;
 	UINT16 index;
 
-	if (x >= MAP_TILE_W || y >= 18) {
+	if (x >= scroll_tiles_w || y >= scroll_tiles_h) {
 		return 0;
 	}
 
-	index = (UINT16)(y * MAP_TILE_W + x);
+	index = (UINT16)(y * scroll_tiles_w + x);
 
 	if (current_room == 4) {
 		PUSH_BANK(BANK(map5));
@@ -340,7 +339,7 @@ void SpawnRoomFromTable(UINT8 room_index) {
 	POP_BANK;
 }
 
-void GetRandomSpawnPositionFromTable(UINT8* x, UINT8* y) {
+void GetRandomSpawnPositionFromTable(UINT16* x, UINT16* y) {
 	PUSH_BANK((UINT8)(UINT16)&__bank_Rooms);
 	GetRandomSpawnPosition(x, y);
 	POP_BANK;
@@ -349,6 +348,12 @@ void GetRandomSpawnPositionFromTable(UINT8* x, UINT8* y) {
 void EnsureRoomSpawnPointsFromTable(void) {
 	PUSH_BANK((UINT8)(UINT16)&__bank_Rooms);
 	EnsureRoomSpawnPoints();
+	POP_BANK;
+}
+
+void ApplyDoorSpawnUnlocksFromTable(UINT16 door_x, UINT16 door_y) {
+	PUSH_BANK((UINT8)(UINT16)&__bank_Rooms);
+	ApplyDoorSpawnUnlocks(door_x, door_y);
 	POP_BANK;
 }
 

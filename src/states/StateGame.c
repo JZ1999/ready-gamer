@@ -17,6 +17,15 @@
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
 
+// DEBUG: start directly in this room index for testing — set back to 0 for normal start
+#define DEBUG_START_ROOM 0
+// DEBUG: start with the electric weapon already unlocked — set back to 0 for normal start
+#define DEBUG_START_ELECTRIC 0
+// DEBUG: start with this many Ready Coins — set back to 0 for normal start
+#define DEBUG_START_COINS 0
+
+#define STARTING_LIVES 2
+
 #define SCREEN_WIDTH 160
 #define SCREEN_HEIGHT 144
 
@@ -56,6 +65,7 @@ UINT8 pending_room_transition = 0;
 UINT8 pending_electric_pickup = 0;
 
 UINT16 ready_coins = 0; // Player's currency
+UINT8 player_lives = STARTING_LIVES;
 
 /*
  * 20 wave tables — difficulty ramps by count + enemy mix.
@@ -103,7 +113,7 @@ UINT8 enemy_spawn_index = 0;
 void SyncGameHud(void) {
     INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d       ", ready_coins);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 }
 
 static void ClampLevel(void) {
@@ -130,7 +140,7 @@ void StartRoomEnemyWave(void) {
 void SpawnEnemies() {
      if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
         if (--spawn_timer == 0) {
-            UINT8 x, y;
+            UINT16 x, y;
             GetRandomSpawnPositionFromTable(&x, &y);
 
             UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
@@ -195,7 +205,7 @@ void CheckForNextLevel() {
 
 
 void LoadLevel(UINT8 level) {
-    SpawnRoomFromTable(0);
+    SpawnRoomFromTable(current_room);
     current_level = level;
     ClampLevel();
     StartRoomEnemyWave();
@@ -210,20 +220,21 @@ void START() {
     last_bg_pal_loaded = 0;
     scroll_offset_x = 0;
     scroll_offset_y = 0;
-    current_room = 0;
+    current_room = DEBUG_START_ROOM;
     current_level = 1;
-    ready_coins = 0;
-    player_electric_attack = 0;
+    ready_coins = DEBUG_START_COINS;
+    player_lives = STARTING_LIVES;
+    player_electric_attack = DEBUG_START_ELECTRIC;
     pending_room_transition = 0;
     pending_electric_pickup = 0;
 
-    InitRoomScrollFromTable(0);
+    InitRoomScrollFromTable(current_room);
 
     INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 0);
     DPrintf("       Level %d      ", current_level);
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d       ", ready_coins);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 
     initarand(DIV_REG);
     PlayMusic(track1, LOOP);
@@ -254,8 +265,8 @@ void CheckForPlayerDeath() {
         spawn_timer = ENEMY_SPAWN_DELAY;
         enemy_spawn_index = 0;
         current_level = 1;
-        current_room = 0;
-        ready_coins = 0;
+        current_room = DEBUG_START_ROOM;
+        ready_coins = DEBUG_START_COINS;
         player_electric_attack = 0;
         
         // Clear the screen and show restart message
@@ -330,7 +341,7 @@ void UPDATE() {
     }
 
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d       ", ready_coins);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 
     SpawnEnemies();
     
