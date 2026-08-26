@@ -132,7 +132,7 @@ Sprite* GetAdjacentDoorForPurchase(Sprite* player) {
     return NULL;
 }
 
-void TakeDamage(Sprite* player) {
+void TakeDamage(Sprite* player) BANKED {
     if(player->custom_data[CD_INVINCIBILITY] > 0) return;
 
     if(player->custom_data[CD_PLAYER_HEALTH] > 0) {

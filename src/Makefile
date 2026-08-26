@@ -35,3 +35,8 @@ $(OBJDIR_RES)/map4.gbm.c: ../res/map4.gbm
 $(OBJDIR_RES)/map5.gbm.c: ../res/map5.gbm
 	@$(GBM2C) $< $(OBJDIR_RES)
 	@powershell -NoProfile -Command "(Get-Content -Raw '$(OBJDIR_RES)/map5.gbm.c') -replace '#pragma bank 255','#pragma bank 4' -replace 'const void __at\(255\) __bank_map5','const void __at(4) __bank_map5' | Set-Content -NoNewline '$(OBJDIR_RES)/map5.gbm.c'"
+
+# Boss-run auto-scroll level (StateBossRun) — bigger than any room map, gets its own bank.
+$(OBJDIR_RES)/mapboss.gbm.c: ../res/mapboss.gbm
+	@$(GBM2C) $< $(OBJDIR_RES)
+	@powershell -NoProfile -Command "(Get-Content -Raw '$(OBJDIR_RES)/mapboss.gbm.c') -replace '#pragma bank 255','#pragma bank 5' -replace 'const void __at\(255\) __bank_mapboss','const void __at(5) __bank_mapboss' | Set-Content -NoNewline '$(OBJDIR_RES)/mapboss.gbm.c'"

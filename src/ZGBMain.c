@@ -2,6 +2,7 @@
 #include "Math.h"
 #include "BankManager.h"
 #include "Rooms.h"
+#include "BossRun.h"
 #include "Scroll.h"
 #include "Sprite.h"
 #include "main.h"
@@ -13,12 +14,14 @@ IMPORT_MAP(map2);
 IMPORT_MAP(map3);
 IMPORT_MAP(map4);
 IMPORT_MAP(map5);
+IMPORT_MAP(mapboss);
 
 extern const unsigned char map_map[];
 extern const unsigned char map2_map[];
 extern const unsigned char map3_map[];
 extern const unsigned char map4_map[];
 extern const unsigned char map5_map[];
+extern const unsigned char mapboss_map[];
 
 extern const void __bank_Rooms;
 extern UINT8 last_tile_loaded;
@@ -275,6 +278,72 @@ UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {
 	}
 
 	return result;
+}
+
+/*
+ * StateBossRun support — a single fixed map (mapboss), no room-index
+ * branching needed (unlike the dungeon-crawler room system above). Its own
+ * small collision helper on purpose: mapboss only ever uses tiles 0/1
+ * (floor/wall), no partial-brick tiles, so it doesn't need to share
+ * CheckEdgeMapCollision's partial-brick logic — simpler and independent
+ * of the room-collision code so tuning one can't regress the other.
+ */
+void InitBossRunScroll(void) {
+	InitScroll(BANK(mapboss), &mapboss, scroll_collision_tiles, 0);
+}
+
+UINT8 BossRunTileBlocked(UINT16 x, UINT16 y) {
+	UINT8 tile;
+	UINT16 index;
+
+	if (x >= BOSSRUN_MAP_TILES_W || y >= BOSSRUN_MAP_TILES_H) {
+		return 1; /* out of bounds counts as blocked, keeps sprites on the map */
+	}
+
+	index = (UINT16)(y * BOSSRUN_MAP_TILES_W + x);
+
+	PUSH_BANK(BANK(mapboss));
+	tile = mapboss_map[index];
+	POP_BANK;
+
+	return tile == TILE_FULL_BRICK;
+}
+
+static UINT8 BossRunCheckCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy) {
+	INT16 nx = (INT16)px + dx;
+	INT16 ny = (INT16)py + dy;
+	UINT8 left_tile, right_tile, top_tile, bottom_tile;
+
+	if (U_LESS_THAN(nx, 0) || (UINT16)(nx + coll_w - 1) >= BOSSRUN_MAP_PIXELS_W ||
+	    U_LESS_THAN(ny, 0) || (UINT16)(ny + coll_h - 1) >= BOSSRUN_MAP_PIXELS_H) {
+		return 1;
+	}
+
+	left_tile = (UINT8)(nx >> 3);
+	right_tile = (UINT8)((nx + coll_w - 1) >> 3);
+	top_tile = (UINT8)(ny >> 3);
+	bottom_tile = (UINT8)((ny + coll_h - 1) >> 3);
+
+	if (BossRunTileBlocked(left_tile, top_tile)) return 1;
+	if (BossRunTileBlocked(right_tile, top_tile)) return 1;
+	if (BossRunTileBlocked(left_tile, bottom_tile)) return 1;
+	if (BossRunTileBlocked(right_tile, bottom_tile)) return 1;
+
+	return 0;
+}
+
+UINT8 BossRunTranslateSprite(Sprite* sprite, INT8 dx, INT8 dy) {
+	UINT16 px = sprite->x;
+	UINT16 py = sprite->y;
+
+	if ((dx || dy) && BossRunCheckCollision(px, py, sprite->coll_w, sprite->coll_h, dx, dy)) {
+		return 1;
+	}
+
+	if (dx) sprite->x = (UINT16)((INT16)px + dx);
+	if (dy) sprite->y = (UINT16)((INT16)py + dy);
+
+	return 0;
 }
 
 void InitRoomScrollFromTable(UINT8 room_index) {

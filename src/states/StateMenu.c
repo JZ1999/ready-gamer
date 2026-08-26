@@ -50,9 +50,15 @@ void START() {
  * Handles input for menu navigation and state transitions
  */
 void UPDATE() {
-    // Check for START button press to begin the game
+    // DEBUG: START/A goes to the experimental boss run instead of the normal
+    // game for testing — swap back to SetState(StateGame) when done.
     if (KEY_TICKED(J_START) || KEY_TICKED(J_A)) {
         PlayMusic(readygames, 0);
+        SetState(StateBossRun);
+    }
+
+    // DEBUG: SELECT still reaches the normal game, for comparison while testing
+    if (KEY_TICKED(J_SELECT)) {
         SetState(StateGame);
     }
 }
