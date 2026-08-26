@@ -7,9 +7,6 @@
 #include "Keys.h"
 #include "SpriteManager.h"
 #include "BossRun.h"
-#include "Print.h"
-
-IMPORT_TILES(font);
 
 /*
  * Auto-scroll "dodge the boss" mode — separate from the room-exploration
@@ -33,12 +30,10 @@ IMPORT_TILES(font);
 extern UINT8 last_tile_loaded;
 extern UINT8 last_bg_pal_loaded;
 extern INT8 scroll_h_border;
-extern UINT8 player_lives;
 
 extern Sprite* boss_run_player;
 
 static UINT16 bullet_timer;
-static UINT16 bullets_spawned; /* DEBUG — temporary, to confirm bullets are actually firing */
 
 void START() {
     HIDE_WIN;
@@ -55,16 +50,12 @@ void START() {
     InitBossRunScroll();
 
     bullet_timer = BULLET_SPAWN_INTERVAL;
-    bullets_spawned = 0;
 
     scroll_target = SpriteManagerAdd(CameraDriver, 0, 0);
     SpriteManagerAdd(BossRunPlayer, 16, 72);
 
     SHOW_BKG;
     SHOW_SPRITES;
-
-    INIT_CONSOLE(font, 1); // DEBUG — temporary, remove once bullet damage is confirmed
-    scroll_h_border = 0;
 }
 
 void UPDATE() {
@@ -86,13 +77,8 @@ void UPDATE() {
         bullet_timer = BULLET_SPAWN_INTERVAL;
         if (boss_run_player) {
             SpriteManagerAdd(BossBullet, scroll_x + SCREENWIDTH - 8, boss_run_player->y);
-            bullets_spawned++;
         }
     }
-
-    // DEBUG — temporary
-    DPRINT_POS(0, 0);
-    DPrintf("L:%d B:%d", player_lives, bullets_spawned);
 }
 
 void DESTROY() {
