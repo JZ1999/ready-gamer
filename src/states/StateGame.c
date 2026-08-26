@@ -302,8 +302,9 @@ void UPDATE() {
         pending_room_transition = 0;
 
         if (next_room >= room_count) {
-            /* Cleared final room portal → win / raffle screen */
-            SetState(StateWin);
+            /* Cleared final room portal → boss run; it calls SetState(StateWin)
+             * itself once the corridor's far end is reached. */
+            SetState(StateBossRun);
             return;
         }
 
