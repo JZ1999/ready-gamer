@@ -91,13 +91,15 @@ static void SetPlayerWalkFrame(void) {
 }
 
 static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
-    if (sprite->custom_data[CD_INVINCIBILITY] > 0) {
-        /* Phase through walls while invincible — otherwise a player who
-         * just got crushed against a wall by the advancing camera (see
-         * IsCrushedByWall below) has no way to escape before getting hit
-         * again the instant invincibility runs out. */
+    if (x != 0 && sprite->custom_data[CD_INVINCIBILITY] > 0) {
+        /* Phase through walls horizontally while invincible — otherwise a
+         * player who just got crushed against a wall by the advancing
+         * camera (see IsCrushedByWall below) has no way to escape before
+         * getting hit again the instant invincibility runs out. Only the
+         * x-axis needs this: the camera clamp (UPDATE()) only ever forces
+         * x past collision, never y, so vertical movement can keep using
+         * normal wall collision even while invincible. */
         sprite->x = (UINT16)((INT16)sprite->x + x);
-        sprite->y = (UINT16)((INT16)sprite->y + y);
         return 0;
     }
     return BossRunTranslateSprite(sprite, x, y);
