@@ -22,7 +22,7 @@
 // DEBUG: start with the electric weapon already unlocked — set back to 0 for normal start
 #define DEBUG_START_ELECTRIC 0
 // DEBUG: start with this many Ready Coins — set back to 0 for normal start
-#define DEBUG_START_COINS 0
+#define DEBUG_START_COINS 100
 
 #define STARTING_LIVES 2
 

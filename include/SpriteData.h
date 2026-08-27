@@ -44,8 +44,9 @@ typedef enum {
 #define CD_ANIM_OFFSET   2
 #define CD_LIFETIME      3
 
-#define PROJECTILE_DAMAGE_NORMAL   1
-#define PROJECTILE_DAMAGE_ELECTRIC 2
+/* DEBUG cheats — restore NORMAL=1 ELECTRIC=2 when done testing */
+#define PROJECTILE_DAMAGE_NORMAL   10
+#define PROJECTILE_DAMAGE_ELECTRIC 10
 
 #define IsEnemyType(type) ((type) == BasicVirus || (type) == SpeedVirus || (type) == TankVirus || (type) == BomberVirus || (type) == ChargeVirus)
 #define IsDoorType(type) ((type) == Door)

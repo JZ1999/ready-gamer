@@ -50,9 +50,9 @@ void START() {
  * Handles input for menu navigation and state transitions
  */
 void UPDATE() {
-    // Check for START button press to begin the game
+    // DEBUG: jump straight into the boss run — restore StateGame when done
     if (KEY_TICKED(J_START) || KEY_TICKED(J_A)) {
         PlayMusic(readygames, 0);
-        SetState(StateGame);
+        SetState(StateBossRun);
     }
 }

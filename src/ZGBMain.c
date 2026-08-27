@@ -309,34 +309,85 @@ UINT8 BossRunTileBlocked(UINT16 x, UINT16 y) {
 	return tile == TILE_FULL_BRICK;
 }
 
-static UINT8 BossRunCheckCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy) {
+/* Ceiling/floor rows stay solid during invincibility phasing. */
+static UINT8 BossRunEdgeBoundaryBlocked(UINT16 x, UINT16 y) {
+	if (x >= BOSSRUN_MAP_TILES_W || y >= BOSSRUN_MAP_TILES_H) {
+		return 1;
+	}
+
+	if (y == 0 || y == (UINT16)(BOSSRUN_MAP_TILES_H - 1)) {
+		return BossRunTileBlocked(x, y);
+	}
+
+	return 0;
+}
+
+static UINT8 BossRunCheckCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy, UINT8 phasing) {
 	INT16 nx = (INT16)px + dx;
 	INT16 ny = (INT16)py + dy;
-	UINT8 left_tile, right_tile, top_tile, bottom_tile;
+	UINT8 row, col, end_col, feet_row;
+	INT16 pivot;
 
 	if (U_LESS_THAN(nx, 0) || (UINT16)(nx + coll_w - 1) >= BOSSRUN_MAP_PIXELS_W ||
 	    U_LESS_THAN(ny, 0) || (UINT16)(ny + coll_h - 1) >= BOSSRUN_MAP_PIXELS_H) {
 		return 1;
 	}
 
-	left_tile = (UINT8)(nx >> 3);
-	right_tile = (UINT8)((nx + coll_w - 1) >> 3);
-	top_tile = (UINT8)(ny >> 3);
-	bottom_tile = (UINT8)((ny + coll_h - 1) >> 3);
+	feet_row = (UINT8)((ny + coll_h - 1) >> 3);
 
-	if (BossRunTileBlocked(left_tile, top_tile)) return 1;
-	if (BossRunTileBlocked(right_tile, top_tile)) return 1;
-	if (BossRunTileBlocked(left_tile, bottom_tile)) return 1;
-	if (BossRunTileBlocked(right_tile, bottom_tile)) return 1;
+	if (dx) {
+		if (dx > 0) {
+			pivot = (INT16)(nx + coll_w - 1);
+		} else {
+			pivot = nx;
+		}
+
+		col = (UINT8)(pivot >> 3);
+		row = (UINT8)(ny >> 3);
+
+		while (row <= feet_row) {
+			if (phasing) {
+				if (BossRunEdgeBoundaryBlocked(col, row)) {
+					return 1;
+				}
+			} else if (BossRunTileBlocked(col, row)) {
+				return 1;
+			}
+			row++;
+		}
+	}
+
+	if (dy) {
+		if (dy > 0) {
+			pivot = (INT16)(ny + coll_h - 1);
+		} else {
+			pivot = ny;
+		}
+
+		row = (UINT8)(pivot >> 3);
+		col = (UINT8)(nx >> 3);
+		end_col = (UINT8)((nx + coll_w - 1) >> 3);
+
+		while (col <= end_col) {
+			if (phasing) {
+				if (BossRunEdgeBoundaryBlocked(col, row)) {
+					return 1;
+				}
+			} else if (BossRunTileBlocked(col, row)) {
+				return 1;
+			}
+			col++;
+		}
+	}
 
 	return 0;
 }
 
-UINT8 BossRunTranslateSprite(Sprite* sprite, INT8 dx, INT8 dy) {
+static UINT8 BossRunTranslateSpriteEx(Sprite* sprite, INT8 dx, INT8 dy, UINT8 phasing) {
 	UINT16 px = sprite->x;
 	UINT16 py = sprite->y;
 
-	if ((dx || dy) && BossRunCheckCollision(px, py, sprite->coll_w, sprite->coll_h, dx, dy)) {
+	if ((dx || dy) && BossRunCheckCollision(px, py, sprite->coll_w, sprite->coll_h, dx, dy, phasing)) {
 		return 1;
 	}
 
@@ -344,6 +395,14 @@ UINT8 BossRunTranslateSprite(Sprite* sprite, INT8 dx, INT8 dy) {
 	if (dy) sprite->y = (UINT16)((INT16)py + dy);
 
 	return 0;
+}
+
+UINT8 BossRunTranslateSprite(Sprite* sprite, INT8 dx, INT8 dy) {
+	return BossRunTranslateSpriteEx(sprite, dx, dy, 0);
+}
+
+UINT8 BossRunTranslateSpritePhasing(Sprite* sprite, INT8 dx, INT8 dy) {
+	return BossRunTranslateSpriteEx(sprite, dx, dy, 1);
 }
 
 void InitRoomScrollFromTable(UINT8 room_index) {

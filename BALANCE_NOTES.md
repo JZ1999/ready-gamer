@@ -72,6 +72,21 @@ Para abrir la 1ª puerta (room0) sin pickups, se necesitan **10 kills** solo de 
 - ¿Costo de puerta fijo (10) o escalado por sala/nivel?
 - ¿Bomb necesita aviso visual (parpadeo previo a explotar) además del sprite?
 
-## 4. Build
+## 5. Boss run — `StateBossRun` / `BossRunPlayer.c`
+
+| Constante / sistema | Valor | Efecto |
+|---|---|---|
+| `BOSSRUN_STARTING_LIVES` | 2 | Vidas en boss run (separado del juego principal) |
+| `INVINCIBILITY_FRAMES` | 60 (~1s) | I-frames tras golpe de bala |
+| `RESPAWN_INVINCIBILITY_FRAMES` | 180 (~3s) | I-frames tras perder vida |
+| `BULLET_SPAWN_INTERVAL` | 90 (~1.5s) | `StateBossRun.c` — cadencia de `BossBullet` |
+| `AUTOSCROLL_FRAME_DIVIDER` | 2 | `CameraDriver.c` — ~30 px/s |
+| Map size | 240×18 tiles | `include/BossRun.h` — corrido largo; contenido WIP |
+
+**Reglas de paredes con i-frames (solo mapboss):** ver `SESSION_NOTES.md` / `CLAUDE.md` § Boss run. Interior = atravesable; filas 0 y 17 = sólidas; al terminar i-frames dentro de pared interior → empuje a la derecha.
+
+**Tuning pendiente:** densidad de obstáculos en `mapboss`, patrones de balas, velocidad de scroll por tramo.
+
+## 6. Build
 
 ROM debug compilado y verificado: `bin/READY_GAMER_Debug.gb` (también en `Debug/rom.gb`). `ZGB.zip` se descomprimió en `ZGB_extracted/ZGB` (gitignored) para poder compilar — `ZGB_PATH` usado: `ZGB_extracted/ZGB/common`.

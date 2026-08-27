@@ -15,5 +15,7 @@
 void InitBossRunScroll(void);
 UINT8 BossRunTileBlocked(UINT16 x, UINT16 y);
 UINT8 BossRunTranslateSprite(Sprite* sprite, INT8 dx, INT8 dy);
+/* Invincibility movement — interior walls pass through, ceiling/floor rows stay solid. */
+UINT8 BossRunTranslateSpritePhasing(Sprite* sprite, INT8 dx, INT8 dy);
 
 #endif
