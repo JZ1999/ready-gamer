@@ -5,6 +5,7 @@
 #include "SpriteData.h"
 #include "SoundEffects.h"
 #include "StateGame.h"
+#include "BossFight.h"
 
 #define MAX_SPRITES 20
 
@@ -19,6 +20,7 @@
 
 extern UINT8 enemies_killed;
 extern UINT16 ready_coins;
+extern Sprite* boss_fight_player;
 
 void KillVirus(Sprite* virus, UINT8 virus_id) {
     if (virus && virus->type == BomberVirus) {
@@ -61,12 +63,26 @@ void START() {
 }
 
 void UPDATE() {
-    // Movement based on direction
-    switch(THIS->custom_data[CD_DIR]) {
-        case 0: SafeTranslateSprite(THIS, 0, -1); break; // Up
-        case 1: SafeTranslateSprite(THIS, 0, 1); break;  // Down
-        case 2: SafeTranslateSprite(THIS, -1, 0); break; // Left
-        case 3: SafeTranslateSprite(THIS, 1, 0); break;  // Right
+    // Movement based on direction. In the boss-fight arena (StateBossFight)
+    // there's no active room, so SafeTranslateSprite's room-tile collision
+    // reads stale/wrong data and can block the bullet mid-flight — route
+    // through the arena's own BossFightTranslateSprite there instead, same
+    // as every other boss-fight sprite (see the boss_fight_player pattern
+    // in Boss.c/BossBulletAimed.c/etc.).
+    if (boss_fight_player) {
+        switch(THIS->custom_data[CD_DIR]) {
+            case 0: BossFightTranslateSprite(THIS, 0, -1); break; // Up
+            case 1: BossFightTranslateSprite(THIS, 0, 1); break;  // Down
+            case 2: BossFightTranslateSprite(THIS, -1, 0); break; // Left
+            case 3: BossFightTranslateSprite(THIS, 1, 0); break;  // Right
+        }
+    } else {
+        switch(THIS->custom_data[CD_DIR]) {
+            case 0: SafeTranslateSprite(THIS, 0, -1); break; // Up
+            case 1: SafeTranslateSprite(THIS, 0, 1); break;  // Down
+            case 2: SafeTranslateSprite(THIS, -1, 0); break; // Left
+            case 3: SafeTranslateSprite(THIS, 1, 0); break;  // Right
+        }
     }
 
     // === ENEMY COLLISION ===
