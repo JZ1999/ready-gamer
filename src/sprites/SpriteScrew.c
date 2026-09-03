@@ -95,6 +95,22 @@ void UPDATE() {
                 return;
 			}
 		}
+		if (spr->type == Boss) {
+			// Not IsEnemyType/KillVirus: that path does coin/wave-counter
+			// bookkeeping that doesn't apply in the boss arena and can't run
+			// the phase-2 split-on-death logic. Boss.c owns its own death
+			// handling (checked every frame once its HP hits 0).
+			if (CheckCollision(THIS, spr)) {
+				if (spr->custom_data[0] > PROJECTILE_DAMAGE_NORMAL) { // CD_BOSS_HEALTH, Boss.c
+					spr->custom_data[0] -= PROJECTILE_DAMAGE_NORMAL;
+				} else {
+					spr->custom_data[0] = 0;
+				}
+				PlayEnemyHitSound();
+				SpriteManagerRemove(THIS_IDX); // Remove screw
+				return;
+			}
+		}
 	}
 
     // Frame animation with correct offset

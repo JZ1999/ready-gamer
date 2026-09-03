@@ -50,9 +50,18 @@ void START() {
  * Handles input for menu navigation and state transitions
  */
 void UPDATE() {
-    // DEBUG: jump straight into the boss run — restore StateGame when done
+    // DEBUG: normal button now starts the boss-run corridor directly (auto-
+    // scrolls to the boss-fight arena on its own). Restore StateGame when done.
     if (KEY_TICKED(J_START) || KEY_TICKED(J_A)) {
         PlayMusic(readygames, 0);
         SetState(StateBossRun);
+    }
+    // DEBUG: straight to the boss-fight arena, skipping the corridor.
+    if (KEY_TICKED(J_SELECT)) {
+        SetState(StateBossFight);
+    }
+    // TEMP TEST ONLY: full campaign entry point for automated playtest. Remove.
+    if (KEY_TICKED(J_B)) {
+        SetState(StateGame);
     }
 }

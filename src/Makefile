@@ -40,3 +40,8 @@ $(OBJDIR_RES)/map5.gbm.c: ../res/map5.gbm
 $(OBJDIR_RES)/mapboss.gbm.c: ../res/mapboss.gbm
 	@$(GBM2C) $< $(OBJDIR_RES)
 	@powershell -NoProfile -Command "(Get-Content -Raw '$(OBJDIR_RES)/mapboss.gbm.c') -replace '#pragma bank 255','#pragma bank 5' -replace 'const void __at\(255\) __bank_mapboss','const void __at(5) __bank_mapboss' | Set-Content -NoNewline '$(OBJDIR_RES)/mapboss.gbm.c'"
+
+# Boss-fight static arena (StateBossFight), after the boss-run corridor.
+$(OBJDIR_RES)/mapbossarena.gbm.c: ../res/mapbossarena.gbm
+	@$(GBM2C) $< $(OBJDIR_RES)
+	@powershell -NoProfile -Command "(Get-Content -Raw '$(OBJDIR_RES)/mapbossarena.gbm.c') -replace '#pragma bank 255','#pragma bank 6' -replace 'const void __at\(255\) __bank_mapbossarena','const void __at(6) __bank_mapbossarena' | Set-Content -NoNewline '$(OBJDIR_RES)/mapbossarena.gbm.c'"

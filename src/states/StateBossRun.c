@@ -18,7 +18,9 @@
  * `scroll_target` — the engine's own per-frame camera-follow does the
  * rest, nothing here calls MoveScroll directly.
  * Win: scroll clamps at the map's right edge once the camera can't scroll
- * further — checked below instead of a separate distance/timer.
+ * further — checked below instead of a separate distance/timer. That hands
+ * off to StateBossFight (the static arena + real boss), not StateWin
+ * directly — StateBossFight is what triggers StateWin once both bosses die.
  * Lose: BossRunPlayer/BossBullet reuse the normal game's lives/respawn
  * system (BossRunTakeDamage, a copy of SpritePlayer's TakeDamage) — it
  * calls SetState(StateGameOver) itself once lives run out, nothing to
@@ -69,7 +71,7 @@ void UPDATE() {
     scroll_y = 0;
 
     if (scroll_x >= (INT16)(BOSSRUN_MAP_PIXELS_W - SCREENWIDTH)) {
-        SetState(StateWin);
+        SetState(StateBossFight);
         return;
     }
 
