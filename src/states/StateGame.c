@@ -18,13 +18,13 @@
 #define NEXT_ROUND_TIMER 300
 
 // DEBUG: start directly in this room index for testing — set back to 0 for normal start
-#define DEBUG_START_ROOM 3
+#define DEBUG_START_ROOM 0
 // DEBUG: start with the electric weapon already unlocked — set back to 0 for normal start
 #define DEBUG_START_ELECTRIC 0
 // DEBUG: start with this many Ready Coins — set back to 0 for normal start
 #define DEBUG_START_COINS 100
 
-#define STARTING_LIVES 2
+#define STARTING_LIVES 10
 
 #define SCREEN_WIDTH 160
 #define SCREEN_HEIGHT 144
