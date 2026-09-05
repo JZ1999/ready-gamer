@@ -124,19 +124,87 @@ static const PickupPlacement room2_coins[] = {
     { 72, 100 },
 };
 
+/*
+ * map4 rework v4: user-drawn in GBMB by hand (screenshot with color-coded
+ * markup: green=player start, red=spawns, purple=portal, black=door). Door
+ * tile coordinates (col,row) read directly off GBMB's status bar, then
+ * shifted 1 tile left/up per the user's request. player/spawn/portal tiles
+ * read from the screenshot against a render of the saved map4.gbm tile data
+ * (only need to land on a floor tile). Doors: P1=(2,10), P2=(8,4),
+ * P3=(32,7).
+ *
+ * Spawn-lock scheme (inferred from the drawing + a BFS reachability check
+ * against the real tile data, same technique as map5):
+ *   - Only S5 and S7 start unlocked — the two spawns already reachable from
+ *     the player start with all 3 doors closed (everything else is either
+ *     physically gated by a door, or deliberately held back).
+ *   - P1 (south, right by the S1/S6/S8/bottom-row area) is the only door
+ *     that BFS shows actually gates anything physically: opening it reveals
+ *     S1/S6/S8, so it's grouped with the rest of that lower region
+ *     (S9/S10/S11 too) as one wave.
+ *   - P3 (top-right, sitting right next to the S2-S5 cluster) unlocks the
+ *     rest of that cluster (S2/S3/S4) — S5 already active, the other 3 join
+ *     once it's open. Note: S2/S3/S4 sit at (38,5)/(36,5)/(34,5), BELOW the
+ *     near-solid row-3 wall band — BFS shows they actually need BOTH P1 AND
+ *     P2 open (not just P3) to be physically reachable. That's fine, not a
+ *     softlock: the portal already needs all 3 doors open, so a player who
+ *     opens P3 first just kills that trio a bit later, once P1/P2 are open
+ *     too — never permanently unreachable.
+ *   - P2 doesn't gate any spawn on its own (BFS: opening it alone reveals
+ *     nothing new) — same as map5's D2, it only clears part of the path
+ *     (here, jointly with P1, toward S2/S3/S4 and the portal).
+ *   - Portal needs all 3 doors open (BFS-confirmed) — same "all doors"
+ *     convention as map5.
+ * Doors use "replace" semantics (ApplyDoorSpawnUnlocks, see room4 below) so
+ * opening P1 after P3 (or vice versa) re-locks the other's wave — same
+ * accepted behavior as map5's D1/D3.
+ *
+ * Sprite-cutting fix + "move every spawn 1 right" (later pass): the bottom
+ * cluster (S7-S11) and the portal were all sitting on the exact same row
+ * (15), plus 3 always-alive door sprites and the portal itself never get
+ * removed off-screen (lim_x/lim_y=255) — with several enemies alive at
+ * once on that same row, the GB's 10-sprites-per-scanline hardware limit
+ * got exceeded and sprites visually "cut" whenever the player's own sprite
+ * shared that row too. Fixed by spreading the bottom cluster across rows
+ * 14/15/16 instead of all on 15, so no more than 2-3 sprites ever compete
+ * for the same scanline band.
+ *
+ * Simplified by the user (2026-09-05): since the number of unlocked spawns
+ * doesn't change spawn *rate* (SpawnEnemies() spawns one enemy per timer
+ * tick regardless of how many spawn points are unlocked — see
+ * SESSION_NOTES.md), redundant spawns in each door's group were removed —
+ * one per door is enough:
+ *   - P1 still unlocks S1(4,4)/S6(12,10)/S8(4,15) (kept as-is, all 3 already
+ *     needed for the room's original spread).
+ *   - P2 unlocks only S4(33,4) now — S2/S3 removed entirely (were the same
+ *     group, same door, redundant).
+ *   - P3 unlocks only S9(7,14) now — S10/S11 removed entirely (were causing
+ *     the scanline sprite-cutting on that row when clustered).
+ * S5/S7 remain the only spawns unlocked at room load. Portal moved next to
+ * S9 at (9,15). Portal still needs all 3 doors open.
+ */
+static const UINT8 room3_door_p1_unlocks[] = { 0, 3, 5 }; /* S1,S6,S8 */
+static const UINT8 room3_door_p2_unlocks[] = { 1 };       /* S4 */
+static const UINT8 room3_door_p3_unlocks[] = { 6 };       /* S9 */
+
 static const DoorPlacement room3_doors[] = {
-    { 232, 24, 10, NULL, 0 },
+    { 2 * 8, 10 * 8, 10, room3_door_p1_unlocks, ARRAY_LEN(room3_door_p1_unlocks) }, /* P1 */
+    { 8 * 8, 4 * 8, 10, room3_door_p2_unlocks, ARRAY_LEN(room3_door_p2_unlocks) },  /* P2 */
+    { 32 * 8, 7 * 8, 10, room3_door_p3_unlocks, ARRAY_LEN(room3_door_p3_unlocks) }, /* P3 */
 };
 
 static const SpawnPointPlacement room3_spawns[] = {
-    { 40, 30, 0 },
-    { 80, 88, 0 },
-    { 200, 112, 0 },
-    { 48, 120, 0 },
+    { 4 * 8, 4 * 8, 1 },   /* S1 — locked until P1 opens */
+    { 33 * 8, 4 * 8, 1 },  /* S4 — locked until P2 opens */
+    { 37 * 8, 1 * 8, 0 },  /* S5 — the corner one, unlocked at start */
+    { 12 * 8, 10 * 8, 1 }, /* S6 — locked until P1 opens */
+    { 1 * 8, 15 * 8, 0 },  /* S7 — unlocked at start */
+    { 4 * 8, 15 * 8, 1 },  /* S8 — locked until P1 opens */
+    { 7 * 8, 15 * 8, 1 },  /* S9 — locked until P3 opens */
 };
 
 static const PortalPlacement room3_portals[] = {
-    { 280, 24 },
+    { 9 * 8, 15 * 8 }, /* moved next to S9 per user request */
 };
 
 /*
@@ -215,7 +283,7 @@ static const RoomDef rooms[MAX_ROOMS] = {
     },
     {
         ROOM_MAP(map4),
-        48, 40,
+        1 * 8, 1 * 8,
         room3_doors, ARRAY_LEN(room3_doors),
         room3_spawns, ARRAY_LEN(room3_spawns),
         room3_portals, ARRAY_LEN(room3_portals),
@@ -238,8 +306,9 @@ const UINT8 room_count = 5;
 
 /* Runtime lock state for the current room's spawn points, indexed the same
  * as that room's spawn_points[] table. Reset on every room load. map5's 9
- * spawn points are the largest in use today; 10 leaves a little headroom. */
-#define MAX_ROOM_SPAWN_POINTS 10
+ * spawn points are the largest in use today (map4 was trimmed to 7); 12
+ * leaves headroom for future rooms. */
+#define MAX_ROOM_SPAWN_POINTS 12
 static UINT8 spawn_locked[MAX_ROOM_SPAWN_POINTS];
 
 static const RoomDef* GetRoomDef(UINT8 room_index) {
@@ -322,9 +391,13 @@ static void SpawnCoinPickups(const RoomDef* room) {
 }
 
 static void SetupRoomEntities(const RoomDef* room) {
+    /* Portal spawned before spawn points: GB hardware drops sprites past the
+       10-per-scanline cap by OAM order (lowest index wins), and OAM order
+       here follows add order. Exit portal must never lose that race to a
+       spawn marker sharing its row. */
     SpawnDoors(room);
-    SpawnSpawnPoints(room);
     SpawnPortals(room);
+    SpawnSpawnPoints(room);
     SpawnElectricityPickups(room);
     SpawnCoinPickups(room);
 }

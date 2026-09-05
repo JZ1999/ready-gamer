@@ -291,3 +291,87 @@ UPDATE() should be: iterate sprites counting type==Boss into boss_count and summ
 ### Git state
 
 Nothing committed this session. Branch `feature/map5-spawn-locks`, up to date with `origin` (already pulled and merged a teammate's boss-run-physics commit earlier this session — see the addendum above this one — one small conflict in `StateMenu.c` resolved by hand, kept both DEBUG shortcuts: START/A → `StateBossRun`, SELECT → `StateBossFight`). Modified: `include/ZGBMain.h`, `src/Makefile`, `src/sprites/SpriteScrew.c`, `src/states/StateBossRun.c`, `src/states/StateMenu.c`. New untracked: `include/BossFight.h`, `res/mapbossarena.gbm`, `src/assets/bossGfx.c`, `src/sprites/Boss.c`, `src/sprites/BossBulletAimed.c`, `src/sprites/BossFightPlayer.c`, `src/sprites/BossSwordHitbox.c`, `src/states/StateBossFight.c`, `src/systems/BossFightCollision.c`. Do not commit any of this until the blank-screen bug is actually fixed and the feature has been played, not just "doesn't crash."
+
+---
+
+## Session addendum (2026-09-04) — map4 hand-designed by the user in GBMB, wired in; found a real GB sprite-hardware limit
+
+**Resume point for tomorrow: nothing committed. Working tree has `src/systems/Rooms.c`, `res/map4.gbm`, `src/states/StateGame.c` modified — see exact state below before touching map4/room3 again.**
+
+### What happened, in order
+
+1. **Procedural maze attempt (v1, then v2) — both abandoned, fully reverted.** First pass used 1-tile-wide corridors — the player (16×16 collision box, confirmed via `player.gbr.c`) could never fit, softlocking movement instantly. Second pass fixed corridor width to 2 tiles and verified with a faithful Python port of the engine's own `CheckEdgeMapCollision` (simulated real 16×16-box movement, not just "is the tile open") — this one actually worked, but the **user rejected the whole approach**: enemy AI (`EnemyMoveWithWallAvoidance`) is too dumb to navigate a tight generated maze without getting stuck on walls. Per explicit request ("mejor abre la app para que yo lo dibuje"), reverted `res/map4.gbm` and `src/systems/Rooms.c` to git HEAD (both untouched since `6b71b34`) and opened GBMB (`ZGB_extracted/ZGB/env/tools/gbmb18/GBMB.EXE res/map4.gbm`) for the user to hand-draw instead.
+2. **User hand-drew map4 in GBMB**, then marked it up with a colored screenshot (green=player start, red=enemy spawns ["portales" in their terminology], purple=exit portal, black=doors). Door tile coordinates were given precisely (read off GBMB's own status bar); player/spawn/portal positions were read from the screenshot by rendering the actual saved `.gbm` tile data as a comparable image and cross-matching landmarks (same technique as the original map5 coordinate-extraction work) — precision matters for doors (must land exactly in a real wall gap or they gate nothing, learned from the v1 failure), not for spawns/player/portal (any floor tile is fine).
+3. **Wired into `Rooms.c`, room index 3 (map4)**: 3 doors, 11 spawns, 1 portal, all with real BFS-verified reachability under different door-open combinations (same method as the map5 session). Spawn-lock scheme: only 2 spawns active at game start, each door's `unlock_spawn_indices` list grouped by what BFS showed it actually gates (or, when a door didn't physically gate anything, matched thematically to a nearby spawn cluster) — full reasoning is in the comment block above `room3_doors` in `Rooms.c`, don't duplicate it here, it changed shape several times as the user iterated (door shifted, spawns respaced/reordered/rolled back — current final coordinates are whatever's live in `Rooms.c` right now, always trust the file over this prose).
+4. **Found and fixed 2 real bugs along the way**:
+   - **Tile ID 5 rendering as the letter "A"**: `tiles.gbr` only defines 4 real tiles (0-3, confirmed via `Debug/res/tiles.gbr.c`'s `num_tiles`); the user had painted tile-ID-5 cells in GBMB as their own visual door-position markers, which — being out of the tileset's valid range — rendered as whatever leftover VRAM data happened to be there (the HUD font's 'A' glyph, by coincidence of VRAM layout). Not a code bug; fixed by patching those specific tiles back to floor (ID 4) directly in the `.gbm` binary once the door coordinates were captured and no longer needed the markers.
+   - **Sprite "cutting" (partial/missing sprite rendering) that reacts to player position** — this is a **real Game Boy hardware limit** (max 10 sprites per scanline, 40 OAM entries per frame total; see `ZGB_extracted/ZGB/common/src/Sprite.c`'s `DrawSprite`/`next_oam_idx`), not a logic bug. This room keeps 3 doors + the portal permanently "alive" (`lim_x=255,lim_y=255`, so they work off-screen) on top of the player and however many enemies are active — when several of those share the same screen rows, the budget gets exceeded and the lowest-priority sprite's tiles get dropped, which is exactly why it correlated with the player's own position (moving into the crowded row tips it over the edge). **Mitigated (not eliminated — this is a hardware ceiling, not a bug with a real fix)** by spreading the bottom spawn cluster + portal across 3 different rows (14/15/16) instead of all on one row, so far fewer sprites ever compete for the same scanline. **Worth remembering for any future room**: don't cluster many spawns/portals/doors on the same row, especially in a room with multiple always-alive door sprites.
+5. Debug scaffolding: `StateGame.c`'s `DEBUG_START_ROOM` is `3` (normal value `0`) — game boots straight into map4/room3 for testing, kept on purpose, per explicit request this session. Flag before shipping.
+
+### Next session should start with
+
+- User playtesting the current door/spawn/portal layout in BGB (last coordinates are live in `Rooms.c`, see the comment block above `room3_doors` for the full table).
+- Nothing committed — decide with the user whether to commit once they're happy with the layout, and remember to flag `DEBUG_START_ROOM` before any real ship.
+
+---
+
+## Session addendum (2026-09-03) — map4 (room index 3) reworked into a real maze
+
+User's complaint: map4's old layout (see git history, unchanged since `6b71b34`) had scattered short wall fragments that didn't form a real path — the door (232,24) and portal (280,24) sat in the same open, unwalled row, so the door never actually gated anything.
+
+**Rework, same 40×18 map size:** generated a proper single-path maze (Python recursive-backtracker, `res/map4.gbm` binary tile data patched directly — same technique as the map5/mapboss work, see [[reference-ready-gamer-map-editing]]) — one unique corridor from the top-left player start to the bottom-right portal, no loops/shortcuts. One tile along that unique path was left as floor with the **Door sprite** sitting there instead of a wall — since doors block movement themselves (`SpritePlayer.c: CollidesWithClosedDoor`), that's a real chokepoint. Verified with a BFS reachability check (portal/spawns reachable with door open vs. closed) before wiring into `Rooms.c`.
+
+New room3 layout (`Rooms.c`):
+- Player start (1,1) tile → pixel (8,8).
+- 1 door (10 coins), tile (28,9) → pixel (224,72).
+- 4 spawns: 2 before the door (tiles (7,3)/(21,11)), 2 after (tiles (31,5)/(37,11)) — the 2 "after" spawns are unreachable until the door opens.
+- Portal, tile (37,15) → pixel (296,120).
+
+No spawn-locking (`initially_locked`/door unlock lists) used here — matches map4's original simplicity, only the path logic changed. Rebuilt (`make run BUILD_TYPE=Debug`) — compiled clean, BGB launched on the new ROM. **Not yet playtested by the user** — next step is playing it in BGB to confirm the maze feels right and the door genuinely blocks the portal path.
+
+Nothing committed yet — `src/systems/Rooms.c` and `res/map4.gbm` are the only changes this session.
+
+---
+
+## Session addendum (2026-09-05) — room3 door/spawn regrouping, portal scanline-priority fix, and a real engine-wide sprite cap found
+
+**This session's changes are now committed and pushed** (see commit at HEAD of `feature/map5-spawn-locks`) — this addendum documents what shipped and, importantly, one real bug that was found but deliberately NOT fixed yet (see "Not fixed" below, don't assume it's handled).
+
+### Room3 (map4) layout changes, in order
+
+1. **Regrouped door→spawn unlocks** per the user's explicit mapping: P1 unlocks S1/S6/S8, P2 unlocks S2/S3/S4 (was P3's group), P3 unlocks S9/S10/S11 (was P1's group). Coordinates re-specified individually across several iterations (S1→(4,4), S2→(37,4), S3→(35,4), S4→(33,4), S8→(4,15)) — all verified against the real `map4.gbm` tile data (parsed directly, same technique as prior sessions) to confirm none land on a wall tile.
+2. **Simplified further, same session**: since spawn *count* doesn't affect spawn *rate* (see the spawn-rules explanation below — confirmed by reading `SpawnEnemies()`/`GetRandomSpawnPosition`), the user had S2/S3/S10/S11 removed entirely — one spawn per door group is enough. Final room3 spawn list: S1, S4, S5, S6, S7, S8, S9 (7 total, down from 11). Door unlock lists shrunk to match (`room3_door_p1_unlocks={0,3,5}`, `_p2_unlocks={1}`, `_p3_unlocks={6}`).
+3. **Exit portal repositioned several times** during live playtesting (bugs found along the way, see below) — final position **(9,15)**, right next to S9.
+
+### Real bug found and fixed: exit portal was losing the GB's 10-sprites-per-scanline race
+
+User reported the exit portal specifically (not the spawn markers) visually "cutting" when sharing a scanline row with several always-alive spawn markers. Root cause, confirmed by reading `SetupRoomEntities` (`Rooms.c`): sprites are added in this order — `SpawnDoors` → `SpawnSpawnPoints` → `SpawnPortals` — and the GB hardware drops sprites past the 10-per-scanline cap **by OAM order** (lowest index wins). Since the portal was added *last*, it always had the lowest priority on any shared row and was the one dropped. **Fixed**: reordered to `SpawnDoors` → `SpawnPortals` → `SpawnSpawnPoints`, so the portal now outranks spawn markers for OAM slots on a shared scanline.
+
+(`NextLevelPortal` and `SpawnPoint` do use different animation frames of the same `spawner` graphic — 4-8 vs 0-3 — confirmed they're visually distinguishable; that was a dead-end theory, not the actual bug.)
+
+### Real bug found, NOT fixed — deliberately deferred, resume here
+
+Separately, the user reported the **player's bullet** (`SpriteScrew`) going invisible/flickering near (10,15). Traced this to something bigger than per-scanline cutting:
+
+- ZGB's sprite manager (`ZGB_extracted/ZGB/common/include/SpriteManager.h:8`, `N_SPRITE_MANAGER_SPRITES 20`) caps **total concurrent sprites at 20, project-wide** — not per-room, per-scanline. Doors, spawn markers, portal, player, enemies, and bullets all share this one pool.
+- **Doors already free their slot correctly** — `HandleDoorInteraction` (`SpritePlayer.c:190-195`) calls `SpriteManagerRemove` right when a door opens. Not part of the problem.
+- **Spawn markers and the portal never get removed**, ever — not when locked, not when superseded by another door's unlock group. They sit in the pool for the room's entire lifetime.
+- Room3 right now: 3 doors (until opened) + 7 spawn markers + 1 portal + 1 player = up to 12 permanently-occupied slots, leaving as few as 8 for all enemies + bullets + pickups combined. Easy to exhaust with a few enemies alive.
+- **Worse**: `SpriteManagerAdd` (`ZGB_extracted/ZGB/common/src/SpriteManager.c:102`, `sprite_idx = StackPop(sprite_manager_sprites_pool)`) never checks whether the pool is empty. `StackPop` (`include/Stack.h:18`, `#define StackPop(STACK) (*(STACK--))`) has zero bounds checking — if the pool is exhausted, this reads memory *before* the pool array and returns garbage as a sprite index. That's a plausible mechanism for a bullet silently failing to spawn (or, worse, corrupting whatever sprite happens to occupy that garbage index) instead of failing safely.
+- This is **engine code** (`ZGB_extracted/`, gitignored — but the archive `ZGB.zip` it's unzipped from IS tracked in git, so a teammate re-unzipping it gets the same source).
+
+**Discussed fix options with the user**: (a) patch `SpriteManagerAdd`/`StackPop` defensively so a full pool fails safely instead of reading garbage, (b) make spawn markers exist only while unlocked (create on unlock, destroy on lock/room-load-locked) to free up slots, (c) both. **User's call: do neither tonight** — leave the 20-sprite ceiling as a known, documented risk and revisit later. Don't silently "fix" this in a future session without flagging it first — it was an explicit deferral, not an oversight.
+
+### Enemy spawn rules (explained this session, for reference)
+
+- `level_spawns[level][]` / `level_lengths[level]` (`StateGame.c`) fix the **type** and **count** of enemies per wave — deterministic, not random.
+- `spawn_timer` (`ENEMY_SPAWN_DELAY = 180` frames, ~3s) gates spawn **rate** — one enemy per tick, always, regardless of how many spawn points are unlocked.
+- `GetRandomSpawnPosition` (`Rooms.c`) only affects **where** each enemy appears — picks randomly among currently-unlocked spawn indices. More unlocked spawns ≠ faster spawning, only more location variety. This is what justified deleting S2/S3/S10/S11 above.
+
+### Debug scaffolding still in place
+
+`StateGame.c`: `DEBUG_START_ROOM = 3` (normal value `0`) — boots straight into room3/map4 for testing. Flag before any real ship.
+
+### For team review
+
+The substantive logic change this session is entirely in **`src/systems/Rooms.c`** (door/spawn/portal tables for room3, plus the `SetupRoomEntities` reorder). `res/map4.gbm` only changed via earlier sessions' hand-drawing (binary map data, not meaningfully diff-reviewable). The 20-sprite engine cap finding above isn't a diff in this commit — it's a pre-existing latent bug in ZGB itself, worth a heads-up to anyone else building rooms with lots of always-alive sprites (doors/spawns/portals), since it can silently degrade instead of erroring.
