@@ -26,8 +26,6 @@ Direction boss_fight_player_direction;
 
 extern UINT8 player_lives;
 
-#define BOSSFIGHT_STARTING_LIVES 100 // TEMP TEST: no-death playtest run, revert after
-
 #define SHOOT_COOLDOWN       100
 #define PLAYER_MAX_HEALTH    1
 #define INVINCIBILITY_FRAMES 60
@@ -102,8 +100,6 @@ void START() {
     THIS->custom_data[CD_PLAYER_HEALTH] = PLAYER_MAX_HEALTH;
     THIS->custom_data[CD_INVINCIBILITY] = 0;
     THIS->custom_data[CD_WALK_TIMER] = 0;
-
-    player_lives = BOSSFIGHT_STARTING_LIVES;
 
     OBP1_REG = PAL_DEF(0, 0, 0, 0);
     SPRITE_SET_DMG_PALETTE(THIS, 0);
