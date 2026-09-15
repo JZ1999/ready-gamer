@@ -144,6 +144,14 @@ static UINT8 CheckPartialBrickAt(UINT8 tile_x, UINT8 tile_y, UINT8 py, UINT8 col
 	return 0;
 }
 
+/* Room-collision-only corner forgiveness (rooms 0-4 via SafeTranslateSprite;
+ * BossRun/BossFight have their own separate collision and are untouched by
+ * this). Full-size hitbox wall checks need pixel-exact alignment to turn a
+ * corner in a tight corridor; insetting the checked box by a few pixels on
+ * every side lets the player (and room enemies, via the same function) clip
+ * slightly into a corner instead of getting stuck when changing direction. */
+#define WALL_COLLISION_MARGIN 3
+
 static UINT8 CheckEdgeMapCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy) {
 	UINT8 tile_x;
 	UINT8 tile_y;
@@ -154,6 +162,11 @@ static UINT8 CheckEdgeMapCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 col
 	INT16 nx;
 	INT16 ny;
 	INT16 pivot;
+
+	px = (UINT16)(px + WALL_COLLISION_MARGIN);
+	py = (UINT16)(py + WALL_COLLISION_MARGIN);
+	coll_w = (UINT8)(coll_w - (WALL_COLLISION_MARGIN * 2));
+	coll_h = (UINT8)(coll_h - (WALL_COLLISION_MARGIN * 2));
 
 	nx = (INT16)px + dx;
 	ny = (INT16)py + dy;

@@ -7,6 +7,8 @@
 #include "Keys.h"
 #include "SpriteManager.h"
 #include "BossRun.h"
+#include "SoundEffects.h"
+#include <rand.h>
 
 /*
  * Auto-scroll "dodge the boss" mode — separate from the room-exploration
@@ -28,6 +30,11 @@
  */
 
 #define BULLET_SPAWN_INTERVAL 90 // ~1.5s at 60fps — tune to taste
+#define ENEMY_SPAWN_INTERVAL 240 // ~4s at 60fps — tune to taste
+// Rows 0 and BOSSRUN_MAP_TILES_H-1 are the corridor's ceiling/floor walls
+// (see BossRun.h) — enemies only ever spawn somewhere in between.
+#define ENEMY_MIN_TILE_ROW 1
+#define ENEMY_MAX_TILE_ROW (BOSSRUN_MAP_TILES_H - 2)
 
 extern UINT8 last_tile_loaded;
 extern UINT8 last_bg_pal_loaded;
@@ -36,6 +43,7 @@ extern INT8 scroll_h_border;
 extern Sprite* boss_run_player;
 
 static UINT16 bullet_timer;
+static UINT16 enemy_spawn_timer;
 
 void START() {
     HIDE_WIN;
@@ -52,12 +60,16 @@ void START() {
     InitBossRunScroll();
 
     bullet_timer = BULLET_SPAWN_INTERVAL;
+    enemy_spawn_timer = ENEMY_SPAWN_INTERVAL;
 
     scroll_target = SpriteManagerAdd(CameraDriver, 0, 0);
     SpriteManagerAdd(BossRunPlayer, 16, 72);
 
     SHOW_BKG;
     SHOW_SPRITES;
+
+    PlayBossEntranceMelody();  // Hype cue for entering the auto-scroll level
+    PlayBossRunMusicStart();   // Background music for the whole level
 }
 
 void UPDATE() {
@@ -70,6 +82,9 @@ void UPDATE() {
      * the screen height, so scroll_y should always be 0 here anyway. */
     scroll_y = 0;
 
+    UpdateBossEntranceMelody();
+    PlayBossRunMusicUpdate();
+
     if (scroll_x >= (INT16)(BOSSRUN_MAP_PIXELS_W - SCREENWIDTH)) {
         SetState(StateBossFight);
         return;
@@ -79,6 +94,25 @@ void UPDATE() {
         bullet_timer = BULLET_SPAWN_INTERVAL;
         if (boss_run_player) {
             SpriteManagerAdd(BossBullet, scroll_x + SCREENWIDTH - 8, boss_run_player->y);
+        }
+    }
+
+    // Normal level-1 enemies (BasicVirus, same type/AI as room 1 of the
+    // campaign), spawned periodically at a random row just ahead of the
+    // camera's right edge. BossRunTileBlocked takes TILE coordinates, not
+    // pixels — checked first so an enemy doesn't spawn embedded in a wall
+    // pillar; if that random row happens to be blocked this tick, it just
+    // tries again next interval instead of forcing a placement.
+    if (--enemy_spawn_timer == 0) {
+        UINT8 tile_row;
+        UINT16 tile_col;
+
+        enemy_spawn_timer = ENEMY_SPAWN_INTERVAL;
+        tile_row = ENEMY_MIN_TILE_ROW + (rand() % (ENEMY_MAX_TILE_ROW - ENEMY_MIN_TILE_ROW + 1));
+        tile_col = (UINT16)((scroll_x / 8) + (SCREENWIDTH / 8) + 2);
+
+        if (!BossRunTileBlocked(tile_col, tile_row)) {
+            SpriteManagerAdd(BasicVirus, tile_col * 8, tile_row * 8);
         }
     }
 }

@@ -23,6 +23,10 @@
 #define DEBUG_START_ELECTRIC 0
 // DEBUG: start with this many Ready Coins — set back to 0 for normal start
 #define DEBUG_START_COINS 0
+// DEBUG: initial player_lives override for testing (boss run/fight without
+// dying constantly) — set to STARTING_LIVES for normal boot. Separate from
+// STARTING_LIVES itself so the real balance value isn't touched.
+#define DEBUG_STARTING_LIVES 100
 
 #define STARTING_LIVES 3
 
@@ -290,7 +294,7 @@ void UPDATE() {
 
     // Check if player is still alive
     CheckForPlayerDeath();
-    
+
     // If waiting for restart, don't continue with game logic
     if(waiting_for_start) {
         return;

@@ -6,6 +6,7 @@
 #include "Scroll.h"
 #include "SpriteManager.h"
 #include "BossFight.h"
+#include "SoundEffects.h"
 
 /*
  * Static single-screen arena after the boss-run corridor (StateBossRun hands
@@ -46,6 +47,8 @@ void START() {
     SpriteManagerAdd(BossFightPlayer, 24, 60);
     SpriteManagerAddEx(Boss, 112, 50, BOSS_MAIN_HP);
 
+    PlayBossFightMusicStart(); // Background music for the whole fight
+
     SHOW_BKG;
     SHOW_SPRITES;
 }
@@ -54,6 +57,8 @@ void UPDATE() {
     UINT8 i;
     Sprite* spr;
     UINT8 boss_count = 0;
+
+    PlayBossFightMusicUpdate();
 
     SPRITEMANAGER_ITERATE(i, spr) {
         if (spr->type == Boss) {

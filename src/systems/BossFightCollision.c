@@ -125,7 +125,7 @@ void BossFightTakeDamage(Sprite* player) BANKED {
 
 	if (player->custom_data[CD_PLAYER_HEALTH] > 0) {
 		player->custom_data[CD_PLAYER_HEALTH]--;
-		PlayPlayerHitSound();
+		PlayBossArenaDamageSound();
 
 		if (player->custom_data[CD_PLAYER_HEALTH] == 0) {
 			if (player_lives > 0) {

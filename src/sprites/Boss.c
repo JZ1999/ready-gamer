@@ -4,6 +4,7 @@
 #include "SpriteManager.h"
 #include "SpriteData.h"
 #include "BossFight.h"
+#include "SoundEffects.h"
 #include <rand.h>
 
 /*
@@ -38,6 +39,11 @@
 #define CD_BOSS_IS_SPLIT   3
 #define CD_BOSS_MOVE_TIMER 4
 #define CD_BOSS_SLOT       5
+/* Per-sprite (not file-static!) — up to 2 bosses run this file's code at
+ * once during the phase-2 split, so a plain static counter here would be
+ * shared/wrong between them. Throttles the move sound (see ChaseStep) so
+ * it doesn't fire on literally every step and turn into a constant chirp. */
+#define CD_BOSS_MOVE_SOUND_COUNTER 7
 
 #define STATE_CHASE            0
 #define STATE_BULLET_ACTIVE    1
@@ -52,6 +58,9 @@
 #define MOVE_INTERVAL_SLOW     7  // BOSS_VARIANT_FAST_BULLET's own move interval — slower
 #define MOVE_SKIP_CHANCE      60  // out of 255 (~23%) — random.org-style jitter so split
                                    // copies don't move in perfect lockstep
+#define MOVE_SOUND_EVERY_N_STEPS 3 // play the move sound on 1 in N actual steps —
+                                    // every step (up to ~15/sec at MOVE_INTERVAL) was a
+                                    // constant chirp, not a "the boss just moved" cue
 #define CHASE_DURATION        150 // ~2.5s of chasing before firing — tune to taste
 #define BULLET_WAIT_FRAMES    200 // >= BossBulletAimed's own lifetime, so the boss
                                    // doesn't move again while its shot is still live
@@ -98,7 +107,13 @@ static void ChaseStep(void) {
         if (boss_fight_player->y > THIS->y) dy = 1;
         else if (boss_fight_player->y < THIS->y) dy = -1;
 
-        if (dx || dy) BossFightTranslateSprite(THIS, dx, dy);
+        if (dx || dy) {
+            BossFightTranslateSprite(THIS, dx, dy);
+            if (++THIS->custom_data[CD_BOSS_MOVE_SOUND_COUNTER] >= MOVE_SOUND_EVERY_N_STEPS) {
+                THIS->custom_data[CD_BOSS_MOVE_SOUND_COUNTER] = 0;
+                PlayBossMoveSound();
+            }
+        }
     }
 }
 
@@ -142,11 +157,13 @@ static void SnapAim(INT16 dx, INT16 dy, INT8* sx, INT8* sy) {
 static void FireAtPlayer(void) {
     UINT8 slot = THIS->custom_data[CD_BOSS_SLOT];
 
+    PlayBossShootSound();
     SpriteManagerAddEx(BossBulletAimed, THIS->x, THIS->y, slot);
 
     if (THIS->custom_data[CD_BOSS_VARIANT] == BOSS_VARIANT_TRIPLE_SHOT) {
         INT8 sx, sy;
         UINT8 idx, i;
+        PlayBossSpreadShotSound();
         SnapAim((INT16)boss_fight_player->x - (INT16)THIS->x,
                 (INT16)boss_fight_player->y - (INT16)THIS->y, &sx, &sy);
         idx = CompassIndex(sx, sy);
@@ -177,6 +194,7 @@ static void HandleDeath(void) {
     UINT16 y = THIS->y;
 
     boss_slots[slot] = NULL;
+    PlayBossDefeatMelody();
 
     if (!was_split) {
         Sprite* childA = SpriteManagerAddEx(Boss, ClampX((INT16)x - SPLIT_OFFSET), y, BOSS_SPLIT_HP);
@@ -199,6 +217,7 @@ void START() {
     THIS->custom_data[CD_BOSS_STATE] = STATE_CHASE;
     THIS->custom_data[CD_BOSS_TIMER] = CHASE_DURATION;
     THIS->custom_data[CD_BOSS_MOVE_TIMER] = 0;
+    THIS->custom_data[CD_BOSS_MOVE_SOUND_COUNTER] = 0;
     THIS->custom_data[CD_BOSS_VARIANT] = BOSS_VARIANT_NORMAL; // HandleDeath overrides this on split children
 
     slot = (boss_slots[0] == NULL) ? 0 : 1;
@@ -258,6 +277,7 @@ void UPDATE() {
                     Direction facing = FacingTowards(THIS, boss_fight_player);
                     Sprite* hitbox = SpriteManagerAddEx(BossSwordHitbox, THIS->x, THIS->y, (UINT8)facing);
                     hitbox->custom_data[CD_DIR] = (UINT8)facing;
+                    PlayBossSwordSound();
                 }
                 THIS->custom_data[CD_BOSS_STATE] = STATE_SWORD_ACTIVE;
                 THIS->custom_data[CD_BOSS_TIMER] = SWORD_ACTIVE_FRAMES;

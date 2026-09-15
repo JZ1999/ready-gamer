@@ -1,8 +1,105 @@
 # Session notes (local — read first each session)
 
-Last updated: 2026-08-27. Branch: `feature/map5-spawn-locks`.
+Last updated: 2026-09-15. Branch: `feature/map5-spawn-locks`.
 
-## Done this session — boss run physics
+## Session 2026-09-15: reverted debug boot to normal game, mobs stuck on walls in map4/room3 maze
+
+**Reverted `StateMenu.c` DEBUG wiring**: START/A was still going to `StateBossRun` (leftover from the 2026-09-14 boss-run/fight testing session) instead of the normal campaign. Changed back to `SetState(StateGame)` — normal boot flow restored (`StateMenu` → `StateGame`, `DEBUG_START_ROOM=3` still in place so it boots straight into map4/room3 for continued testing there, per existing convention — not reverted, kept on purpose).
+
+**New bug found via screenshot (map4/room3 maze)**: `BasicVirus` enemies get visibly stuck against walls, not moving, near corners/dead-ends in the maze corridors. Root cause identified: `EnemyMoveWithWallAvoidance` (`ZGBMain.c`) only tries a **Y-axis** avoidance nudge when the primary chase movement is blocked — never tries X. If the Y nudge is *also* blocked (a corner or narrow dead-end, common in this maze layout), the enemy has no fallback and just sits there every frame.
+
+**Tried option 1 (bidirectional avoidance) — did NOT fix it, reverted.** Generalized `EnemyMoveWithWallAvoidance` to fall back to an X-axis nudge (toward-target-then-opposite, same pattern as the existing Y fallback) when both Y attempts also failed. Rebuilt, playtested by the user in the same map4/room3 maze spot — **enemies still got stuck**. Reverted cleanly (`ZGBMain.c` back to exact pre-change state, diff-confirmed). **User asked to pause and think before trying anything else** — do not assume any of the other discussed options (wall-hug state machine, jitter, stuck-timer teleport fallback, full pathfinding) yet; wait for direction next session.
+
+**Worth reconsidering next time this comes up**: since adding a *second* axis of avoidance didn't help, the stuck spots in the screenshot may not be a "both axes blocked" case at all — could be something else entirely (e.g. `WALL_COLLISION_MARGIN`/hitbox size vs. this maze's exact corridor geometry, the chase-toward-`scroll_target` logic picking a dx/dy of 0 on the blocked axis so the avoidance branch never even triggers, or the enemy's move timer/state getting stuck some other way not in `EnemyMoveWithWallAvoidance` at all). Don't re-try more avoidance-branch variants blind — worth instrumenting (temporary on-screen debug print of the enemy's attempted dx/dy and the `result` value at the stuck moment, same technique used for the earlier spawn-lock bug hunt) before guessing again.
+
+Nothing committed this session yet — working tree has `StateMenu.c` (reverted debug wiring) on top of the uncommitted pile documented below (SoundEffects, BasicVirus, Boss, etc. from 2026-09-14). `ZGBMain.c` is back to its pre-session state (the avoidance experiment left no trace).
+
+## RESUME HERE (2026-09-15, separate open question): unconfirmed — does the off-camera enemy cleanup actually work?
+
+User asked "ahora que desaparezcan al desaparecer de la cámara" (make enemies disappear when they leave camera view) — but this exact behavior was **already added in the same session**, one turn earlier (see "level-1 enemies" section right below): `BasicVirus.c`'s `UPDATE()` already removes the sprite once `(INT16)THIS->x + 16 < scroll_x` (i.e. once it's scrolled off the left edge of the camera, while `boss_run_player` is active).
+
+**Not established whether this is:**
+(a) the user re-stating the requirement before ever testing the last build, or
+(b) a real bug report — they tested and it's NOT working.
+
+Asked the user to clarify with specifics (do enemies stay visibly stuck off-screen? pop out mid-screen?) — **no answer received yet, session paused here at the user's request** ("guarda todo en memoria... mañana seguimos"). **Do not assume this is fixed or broken — ask again / get the specifics first**, then either confirm it already works or actually debug it (check: is `boss_run_player` reliably non-NULL when expected; does `(INT16)THIS->x` cast behave correctly across the full 1920px map width — it should, GBM map is only 240×8=1920px, well within INT16 range; is the move-timer gate anywhere accidentally skipping this check — it shouldn't, the removal check sits before the `move_timer` gate in the function).
+
+## Session 2026-09-14 (continued further): level-1 enemies (BasicVirus) added to the auto-scroll level
+
+Reused `BasicVirus` (the room game's own level-1 enemy, not a new sprite) inside `StateBossRun` — spawned periodically (`ENEMY_SPAWN_INTERVAL=240` frames) at a random tile row just ahead of the camera's right edge, checked against `BossRunTileBlocked` first so it doesn't spawn embedded in a wall pillar (skips that spawn tick if blocked, tries again next interval rather than forcing placement).
+
+**Real latent bug found and fixed along the way**: `SpriteScrew.c` (the player's own bullet, already fired by `BossRunPlayer.c`) only branched its movement collision for `boss_fight_player` (StateBossFight), never for `boss_run_player` (StateBossRun) — meaning the player could already shoot in the auto-scroll corridor before today, but every bullet was silently using `SafeTranslateSprite` (room-tile collision, stale/wrong data with no active room) instead of `BossRunTranslateSprite`. Same bug class as the boss-fight `SpriteScrew` fix from an earlier session — added the missing `else if (boss_run_player)` branch.
+
+**`BasicVirus.c` changes** (all gated behind the existing `boss_run_player` NULL-guard pattern — every change below is a no-op, byte-identical behavior, in the normal room game where `boss_run_player` is always NULL):
+- Chases `boss_run_player` instead of `scroll_target` — in `StateBossRun`, `scroll_target` is `CameraDriver` (an invisible self-driving sprite, not the player), so chasing it unmodified would have chased the camera instead.
+- Movement collision routes through `BossRunTranslateSprite` instead of `EnemyMoveWithWallAvoidance` (the room-tile wall-avoidance code), matching the established "any sprite shared between the room game and a non-room state must branch its own collision" rule (`CLAUDE.md`/[[reference_ready_gamer_sprite_pool_limit]] territory).
+- Deals its own contact damage via `BossRunTakeDamage` — `BossRunPlayer.c` has no generic per-frame "scan all sprites for an enemy touching me" loop the way `SpritePlayer.c` does for the room game, so (same pattern as `BossBullet.c`) the enemy itself checks `CheckCollision` against `boss_run_player` and calls `BossRunTakeDamage` directly.
+- Self-removes once fully scrolled off the left edge (`THIS->x + 16 < scroll_x`) — otherwise these enemies would live forever off-screen once left behind, eating into the shared 20-sprite pool for no reason (see [[reference_ready_gamer_sprite_pool_limit]]).
+
+Killing them already worked with zero extra code: `SpriteScrew.c`'s enemy-hit loop uses `IsEnemyType(spr->type)` (a generic type check, not state-aware), and `BasicVirus` is already in that list — coins/kill-counter bookkeeping (`ready_coins`/`enemies_killed`) happens same as in a normal room, harmless during the boss run.
+
+Verified: full `make build_gb BUILD_TYPE=Debug` compiles clean — 3 pre-existing warnings in `BasicVirus.c` (overflow-in-constant-conversion, optimizer notice) just shifted line numbers from the new code inserted above them, not new warnings. **Not yet playtested** — next step is confirming enemies actually spawn, chase, deal/take damage, and get cleared correctly in BGB.
+
+## Session 2026-09-14 (continued): custom music sequencer for boss run/fight, 2 real bugs found via playtest, debug-entry correction
+
+**Correction from the user, worth remembering going forward**: "start the game at X" means **menu START → X**, not skipping the menu at ROM boot. First pass wrongly changed `next_state` in `ZGBMain.c` (skips the menu entirely); reverted to `next_state = StateMenu`, and `StateMenu.c`'s START/A handler now has `SetState(StateBossRun)` tagged `// DEBUG` instead (revert to `SetState(StateGame)` for the normal flow). Saved as [[feedback-ready-gamer-debug-entry-point]] — this is now the standing convention for any future "boot into X for testing" request in this project.
+
+**Real bug found via playtest: wave-channel (channel 3) notes with no length limit ring forever.** The boss-entrance-fanfare's 3rd note and the boss-defeat-melody's 3rd (last) note were both on channel 3 with `NR34=0x87` (length counter disabled) — channel 3 has no envelope, so with nothing to silence it and no length limit, that note just kept playing indefinitely instead of fading, which is what the user heard as a "shrill continuous beep" after the fanfare. **Fixed**: both now use `NR34=0xC7` (length-enable bit set) + a real `NR31` length value (~130ms) so they self-stop. Also pulled back the fanfare's peak note (was 0xC0, right at the top of the pitch range this file uses, ~2048Hz — genuinely screechy) to a less extreme peak (0xA8). **This same latent bug still exists, untouched, in the pre-existing door-opening and enemy-hit melodies** (`PlayDoorMelodyNote`/`PlayEnemyHitMelodyNote`, both use a mid-sequence or final channel-3 note the same unsafe way) — not fixed since it wasn't reported as a problem there (probably masked by other gameplay sounds retriggering channel 3 again soon after in normal play) and out of scope for what was asked, but worth knowing if a similar "why is there a background beep" report ever comes up outside the boss content.
+
+**Built a custom PSG music sequencer** (`SoundEffects.c`) for continuous background music in `StateBossRun` and `StateBossFight` — the user asked for "real" level music, but this project's actual music system (hUGETracker `.uge` project files under `res/music/`, played via `DECLARE_MUSIC`/`PlayMusic`) needs a real tracker GUI to author; there's no editor available here and no way to hand-write that binary format reliably (raised this explicitly, user chose "build what you can from scratch" over reusing an existing track or waiting for a hand-composed one). What got built instead: a tiny looping step sequencer using the exact same raw-`PlayFx` approach as every other sound in this file — a fixed 8-step pattern per channel (bass on channel 1, lead/arpeggio on channel 2, kick/hat drums on channel 4), one step advanced per timer tick, looping forever. Two pattern sets: `bossrun_*` (driving E-minor-ish riff, ~133ms/step) and `bossfight_*` (lower/darker chromatic bass, faster ~100ms/step, denser drums). Deliberately **not** run through `PlayMusic`/hUGEDriver — that system and this one would fight over the same 4 hardware channels, so neither `StateBossRun` nor `StateBossFight` call `PlayMusic` while their custom music is active. Channel 3 is left free on purpose for one-shot stingers (spread-shot cue, defeat melody, entrance fanfare) so they don't compete with the continuous music for a channel — channels 1/2/4 do still get momentarily stolen by the boss's own action sounds (move/shoot/sword/damage), which is accepted as normal chiptune-boss-fight texture rather than something to solve.
+
+**Removed** `PlayBossAmbiencePulse` (the periodic noise-channel pulse from earlier this session) — now redundant/actively conflicting with real continuous music covering the same "atmosphere" role in `StateBossFight`.
+
+**3 more new one-shot sounds**, same theme (every boss moment gets its own identity instead of reusing the normal room game's):
+- `PlayBossSpreadShotSound` — channel 3, fires once when `BOSS_VARIANT_TRIPLE_SHOT` adds its 2 diagonal bullets (`Boss.c FireAtPlayer`), distinguishable by ear from the single aimed shot (channel 1).
+- `PlayBossArenaDamageSound` — replaces `PlayPlayerHitSound` in `BossRunPlayer.c`/`BossFightCollision.c` only (the normal room game keeps the original). Heavier/lower, channel 1 (shares the bassline — a hit briefly ducking the beat reads as impact, not a glitch).
+
+Verified: full `make build_gb BUILD_TYPE=Debug` compiles clean, no new warnings (one nested-comment warning caught and fixed — a `res/music/*.uge` path in a comment looked like a comment-close to the compiler). BGB relaunched fresh each time (killed old process + deleted `bgbrecovery.sna` before each relaunch — see [[reference_ready_gamer_build]] on why that file causes stale-state confusion otherwise).
+
+**Nothing committed.** On top of `9cbe8d6`: the 2026-09-09 corner-collision-margin + `DEBUG_START_ROOM=3`/`DEBUG_START_COINS=50` (unrelated, still sitting there), plus today's `StateMenu.c` debug-boss-run wiring and the full sound/music work across `SoundEffects.c/.h`, `Boss.c`, `BossRunPlayer.c`, `BossFightCollision.c`, `StateBossRun.c`, `StateBossFight.c`. **Not yet played/heard by the user** — next step is playtesting both music loops + all the action/damage/spread-shot cues live and tuning by ear (tempo, note choices, and the channel-contention tradeoffs are all first-pass placeholders).
+
+## Session 2026-09-14: boss sound design (4 new cues) + debug boot moved to the auto-scroll level
+
+**Debug boot redirected** (`src/ZGBMain.c`): `next_state` global now boots straight into `StateBossRun` instead of `StateMenu` — tagged `// DEBUG`, revert to `StateMenu` before shipping. `StateGame.c`'s own `DEBUG_START_ROOM=3`/`DEBUG_START_COINS=50` untouched (irrelevant to this boot path since the menu — and therefore `StateGame` — isn't reached by default anymore, but still reachable via `StateWin`/`StateGameOver` → menu → START).
+
+**4 new sound cues, all in `src/systems/SoundEffects.c` / `include/SoundEffects.h`, same raw-NRxx `PlayFx` style as every existing sound (no `.uge`/tracker music involved — these are SFX, not composed tracks):**
+
+1. `PlayBossEntranceMelody`/`UpdateBossEntranceMelody` — 4-note ascending fanfare, faster tempo than the door melody, played once in `StateBossRun.c START()`, ticked from its `UPDATE()`. The "get hyped for this level" cue.
+2. `PlayBossMoveSound` — quiet low blip, `Boss.c`'s `ChaseStep()`, fires each time the boss actually steps.
+3. `PlayBossShootSound` — lower/harsher than the player's own screw-shot, with a downward pitch sweep (`NR10`) for a "growl" — `Boss.c`'s `FireAtPlayer()`.
+4. `PlayBossSwordSound` — noise-channel "shing", `Boss.c`, right when `STATE_SWORD_ACTIVE` begins (hitbox spawn point).
+5. `PlayBossDefeatMelody` — 3-note descending melody, `Boss.c`'s `HandleDeath()` (fires for both the main boss splitting and a split copy's final death — not distinguished, kept simple).
+6. `PlayBossAmbiencePulse` — quiet periodic pulse (not a held/sustained tone — see the function's header comment for why: the arena's other SFX already cycle through all 4 channels constantly, so a continuously-held channel would just get cut the first time anything else fires and never resume). Called from `StateBossFight.c UPDATE()` on its own ~1.5s timer (`ambience_timer`/`AMBIENCE_PULSE_INTERVAL`), same pattern as `StateBossRun.c`'s existing `bullet_timer`.
+
+All values (pitch, duty, envelope, timing) are first-pass placeholders picked for rough distinctiveness, same as every other sound in this file historically — **tune by ear in BGB**, not locked in.
+
+Verified: full `make clean` + `make build_gb BUILD_TYPE=Debug` compiles clean, no new warnings vs. the pre-existing baseline (only the already-documented overflow/optimizer notices). BGB launched on the fresh ROM — **not yet played/heard by the user**, next step is playtesting the 4 cues + entrance fanfare + ambience pulse live and tuning by ear.
+
+**Nothing committed.** Working tree now has, on top of `9cbe8d6`: the pre-existing `WALL_COLLISION_MARGIN` + `DEBUG_START_ROOM=3`/`DEBUG_START_COINS=50` from 2026-09-09 (still uncommitted, unrelated to today), plus today's `next_state` redirect and the 4 new sound cues (`SoundEffects.c/.h`, `Boss.c`, `StateBossRun.c`, `StateBossFight.c`).
+
+## Session 2026-09-09: corner-collision forgiveness (kept), enemy pathfinder (tried, reverted) — resume here
+
+**Working tree right now — only 2 uncommitted changes, both intentional, nothing else:**
+- `src/ZGBMain.c`: `WALL_COLLISION_MARGIN` (3px) added to `CheckEdgeMapCollision` — insets the collision box on all 4 sides so the player/enemies don't need pixel-exact alignment to turn a corner in a tight corridor. Room collision only (`SafeTranslateSprite`/`EnemyMoveWithWallAvoidance`); BossRun/BossFight untouched. **User confirmed working** ("si, todo bien con el tema de las 4 esquinas, todo funciona").
+- `src/states/StateGame.c`: `DEBUG_START_ROOM` 0→3, `DEBUG_START_COINS` 0→50 — debug scaffolding for testing room3/map4 directly. **Revert to 0/0 before shipping** — same "revert before ship" bucket as every other `DEBUG_START_*` in this file.
+
+### Enemy pathfinding — built, fought a real multi-layer bug, reverted at user's request
+
+User asked for a real pathfinder (enemies route around walls instead of dumb X/Y-priority chase + local avoidance). Built a shared per-room "flow field" (BFS from the player's tile, cached in WRAM, read by all 5 enemy types) in a new `src/systems/PathField.c` + `include/PathField.h`, pinned to ROM bank 7. **Fully reverted per explicit request** ("quitemos todo el pathfinder... me cansé", "tiene pegas de fps") — both files deleted, all hooks removed from `ZGBMain.c`/`StateGame.c`/the 5 virus sprite files (`git checkout --` restored those 5 to HEAD exactly). If this is revisited, don't restart from scratch — the design and every bug below are worth reusing.
+
+**Three real, distinct bugs found in one debugging arc, each masking the next (same "PC executing garbage in bank 3" symptom every time, very confusing to disentangle):**
+
+1. **`UINT8` loop counter compared against a bound that can be 900.** `UpdatePathField`'s full-array reset loop (`for (i = 0; i < total; i++) pf_dist[i] = ...`) used `i` declared `UINT8`, shared with an unrelated 4-iteration loop elsewhere in the same function. `total` can be up to 900 (`PATHFIELD_MAX_TILES`, for map5) — a `UINT8` never reaches 900, wraps at 256, infinite loop. Real, would have hit on literally the first frame after room load. Fix: separate `UINT16` counter for that loop.
+
+2. **[[reference-gb-bank-switch-hazard]] — the big one.** A file's own code cannot safely `PUSH_BANK` to a *different* bank if that file itself lives in a switchable bank (not HOME) and needs to keep executing its own subsequent code afterward — the instant the hardware bank flips, the caller's own code (physically stored in that same $4000-$7FFF window) becomes unreachable, and the CPU runs garbage from the new bank instead. Hit this twice: once inside `PathField.c` itself (bank 7) doing its own tile reads via `PUSH_BANK(BANK(map4))`, and again one level up when callers in *their own* switchable banks (`StateGame.c`/bank 2, the 5 virus files/bank 3) did manual `PUSH_BANK(7)/UpdatePathField()/POP_BANK` instead of using `BANKED`. Full writeup + the fix (tile reads must go through a HOME-resident function like `GetRoomTileFromTable`; cross-switchable-bank calls must use SDCC's `BANKED` keyword, never manual `PUSH_BANK` from a non-HOME caller) is in the reference memory — read that before ever adding a new pinned-bank file with cross-bank calls again.
+
+3. **BGB's `bgbrecovery.sna`** (in `ZGB_extracted/ZGB/env/bgb/`) auto-saves an emulator snapshot and appears to reload it on next launch — repeatedly force-killing BGB (`Stop-Process -Force`) between test builds made several rounds of testing look at a stale frozen snapshot instead of the actual new build, wasting real time before this was caught. Delete that file (or close BGB cleanly) before trusting a "still crashes" report during any future debugging session that involves relaunching BGB many times in a row.
+
+**Debugging method that actually worked, once tried:** stop guessing at banking theory, bisect empirically. Built with `make build_gb` (compiles without launching BGB — much faster iteration than `make run`, which blocks until BGB is closed) and launched BGB manually (`ZGB_extracted/ZGB/env/bgb/bgb.exe bin/READY_GAMER_Debug.gb &`) so I could kill/relaunch without waiting on `make`. Stripped `InitPathField`'s body down to nothing, confirmed the game ran fine, then added pieces back one at a time until the exact line reintroduced the crash. This narrowed 3 build-and-guess round trips into 1 short one — start here next time instead of theorizing first.
+
+**Not yet re-attempted**: reintroducing the pathfinder with all 3 bugs fixed *and* the empirically-untested StateGame.c-level `BANKED` path (the very last build, with real `BANKED` end to end, actually got far enough to render the game and move around — the "se cae" report that triggered the final revert was an FPS/stutter complaint from the user being tired of testing, not a confirmed fresh crash; worth a clean re-test before assuming it's still broken).
+
+## Done earlier — boss run physics
 
 Boss map player collision and invincibility (`BossRunPlayer.c` + `ZGBMain.c` boss helpers only). **Room maps 0–4 unchanged** (`SafeTranslateSprite` / `SpritePlayer.c` untouched).
 
