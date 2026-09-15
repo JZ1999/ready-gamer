@@ -7,6 +7,9 @@
 #include "SpriteData.h"
 
 #define CD_FRAME_TIMER 1
+// Cycles 0,1,2 across chase ticks; slot 6 is free (0-3 are health/frame/
+// blink/move, 4-5 are this file's own bomb timer — see SpriteData.h).
+#define CD_DIAG_TICK 6
 
 #define ENEMY_SPEED 5
 #define TOTAL_FRAMES 3
@@ -33,6 +36,7 @@ void START() {
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 3;
     THIS->custom_data[CD_MOVE_TIMER] = 0;
+    THIS->custom_data[CD_DIAG_TICK] = 0;
     SetBombDropTimer(BOMB_DROP_INTERVAL);
     THIS->lim_x = 255;
     THIS->lim_y = 255;
@@ -53,14 +57,24 @@ void UPDATE() {
     if ((*move_timer)++ < ENEMY_SPEED) return;
     *move_timer = 0;
 
-    UINT16 dx = 0;
-    UINT16 dy = 0;
+    // Every 3rd chase tick, also move on Y this same tick instead of only
+    // correcting X first — steps diagonally toward the player so it keeps
+    // closing both axes at once instead of fully aligning X before ever
+    // touching Y.
+    UINT8 diag_tick = THIS->custom_data[CD_DIAG_TICK];
+    THIS->custom_data[CD_DIAG_TICK] = (diag_tick + 1) % 3;
+
+    INT8 dx = 0;
+    INT8 dy = 0;
 
     // Determine movement direction toward player
     if (scroll_target->x > THIS->x + 1) dx = 1;
     else if (scroll_target->x < THIS->x - 1) dx = -1;
-    else if (scroll_target->y > THIS->y + 1) dy = 1;
-    else if (scroll_target->y < THIS->y - 1) dy = -1;
+
+    if (diag_tick == 2 || !dx) {
+        if (scroll_target->y > THIS->y + 1) dy = 1;
+        else if (scroll_target->y < THIS->y - 1) dy = -1;
+    }
 
     UINT8 frame = THIS->anim_frame;
 
@@ -79,7 +93,16 @@ void UPDATE() {
     }
 
     SetFrame(THIS, frame);
-    CustomTranslateSprite(THIS, dx, dy);
+
+    if (dx && dy) {
+        // Diagonal step — move each axis with its own call (same approach
+        // SpritePlayer.c uses for diagonal input) so a wall on one axis
+        // doesn't block progress on the other.
+        CustomTranslateSprite(THIS, dx, 0);
+        CustomTranslateSprite(THIS, 0, dy);
+    } else {
+        CustomTranslateSprite(THIS, dx, dy);
+    }
 }
 
 void DESTROY() {

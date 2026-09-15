@@ -26,7 +26,7 @@
 // DEBUG: initial player_lives override for testing (boss run/fight without
 // dying constantly) — set to STARTING_LIVES for normal boot. Separate from
 // STARTING_LIVES itself so the real balance value isn't touched.
-#define DEBUG_STARTING_LIVES 100
+#define DEBUG_STARTING_LIVES STARTING_LIVES
 
 #define STARTING_LIVES 3
 
@@ -69,7 +69,7 @@ UINT8 pending_room_transition = 0;
 UINT8 pending_electric_pickup = 0;
 
 UINT16 ready_coins = 0; // Player's currency
-UINT8 player_lives = STARTING_LIVES;
+UINT8 player_lives = DEBUG_STARTING_LIVES;
 
 /*
  * 20 wave tables — difficulty ramps by count + enemy mix.
