@@ -12,6 +12,7 @@ Current work-in-progress status, uncommitted changes, and next steps live in `SE
 - `build.bat` — release ROM. `build_Debug.bat` / `build_Color.bat` / `build_DebugColor.bat` — other variants. All of them just `cd src && make run BUILD_TYPE=<Release|Debug|ReleaseColor|DebugColor>` (make binary lives at `%ZGB_PATH%\..\env\make-3.81-bin\bin\make`). **`make run` also launches the BGB emulator** on the freshly built ROM — kill that process if building non-interactively.
 - `clean.bat` — run after editing anything under `include/` or the ZGB engine itself; a plain rebuild doesn't pick those up.
 - Output (gitignored): `bin/READY_GAMER_Debug.gb` (or matching variant name) and `Debug/rom.gb`.
+- **Never build the shipping ROM with `NDEBUG` on**: ZGB's `Print.h` turns `INIT_CONSOLE`/`DPrintf` into no-ops under `NDEBUG`, which removes the HUD and leaves every sprite hidden. `src/Makefile` adds `-UNDEBUG` for that reason.
 - No test suite, no linter — this is a C ROM built with SDCC via GBDK/ZGB.
 
 ## Architecture

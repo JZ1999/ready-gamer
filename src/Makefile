@@ -14,6 +14,16 @@ DEFAULT_SPRITES_SIZE = SPRITES_8x16
 
 include $(ZGB_PATH)/src/MakefileCommon
 
+# Physical cartridge header: MBC5 (0x19, flash carts) + title. These come after
+# the engine's own "-yt 1" so makebin takes the last -yt. Title is max 15 chars.
+BINFLAGS += -yt 0x19 -yn "READY GAMER"
+
+# The HUD (Level/Coins/Lives) is drawn with INIT_CONSOLE/DPrintf, which ZGB's
+# Print.h compiles to NOTHING when NDEBUG is defined (Release does). Without it
+# the window is never set up, the LYC interrupt never runs and every sprite
+# stays hidden. Keep NDEBUG off so Release matches the tested Debug behaviour.
+CFLAGS += -UNDEBUG
+
 # Keep map/map2 in ROM bank 2 so room0/room1 scroll_map stays stable.
 # map3 lives in bank 3 — bank 2 is already near full with maps + game code.
 $(OBJDIR_RES)/map.gbm.c: ../res/map.gbm
