@@ -7,6 +7,7 @@
 #include "Scroll.h"
 #include "SpriteManager.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 #include "MapInfo.h"
 #include "BankManager.h"
 #include <string.h>
@@ -130,7 +131,7 @@ static const PickupPlacement room2_coins[] = {
  * tile coordinates (col,row) read directly off GBMB's status bar, then
  * shifted 1 tile left/up per the user's request. player/spawn/portal tiles
  * read from the screenshot against a render of the saved map4.gbm tile data
- * (only need to land on a floor tile). Doors: P1=(2,10), P2=(8,4),
+ * (only need to land on a floor tile). Doors: P1=(3,10), P2=(8,4),
  * P3=(32,7).
  *
  * Spawn-lock scheme (inferred from the drawing + a BFS reachability check
@@ -188,7 +189,7 @@ static const UINT8 room3_door_p2_unlocks[] = { 1 };       /* S4 */
 static const UINT8 room3_door_p3_unlocks[] = { 6 };       /* S9 */
 
 static const DoorPlacement room3_doors[] = {
-    { 2 * 8, 10 * 8, 10, room3_door_p1_unlocks, ARRAY_LEN(room3_door_p1_unlocks) }, /* P1 */
+    { 3 * 8, 10 * 8, 10, room3_door_p1_unlocks, ARRAY_LEN(room3_door_p1_unlocks) }, /* P1 (moved 1 tile right: tile x 2 -> 3) */
     { 8 * 8, 4 * 8, 10, room3_door_p2_unlocks, ARRAY_LEN(room3_door_p2_unlocks) },  /* P2 */
     { 32 * 8, 7 * 8, 10, room3_door_p3_unlocks, ARRAY_LEN(room3_door_p3_unlocks) }, /* P3 */
 };
@@ -358,11 +359,51 @@ static void SpawnDoors(const RoomDef* room) {
     }
 }
 
-static void SpawnSpawnPoints(const RoomDef* room) {
+/**
+ * Makes the visible spawn-marker sprites match spawn_locked[]: one marker per
+ * UNLOCKED spawn point, none for locked ones. Markers are purely visual
+ * (enemy positions come from the room table), so hiding locked ones only
+ * frees sprite-pool slots (see SpriteBudget.h) without touching gameplay.
+ *
+ * Idempotent: safe to call any time (room load, door open, wave clear). If an
+ * add was refused because the pool was full, the next call retries it.
+ */
+static void SyncSpawnMarkers(const RoomDef* room) {
     UINT8 i;
+    UINT8 spr_idx;
+    Sprite* spr;
+    UINT8 count = room->spawn_point_count;
+    UINT8 has_marker[MAX_ROOM_SPAWN_POINTS];
 
-    for (i = 0; i != room->spawn_point_count; ++i) {
-        SpriteManagerAdd(SpawnPoint, room->spawn_points[i].x, room->spawn_points[i].y);
+    if (count > MAX_ROOM_SPAWN_POINTS) {
+        count = MAX_ROOM_SPAWN_POINTS;
+    }
+    memset(has_marker, 0, sizeof(has_marker));
+
+    /* Pass 1: match live markers to table entries by position. Locked ones
+     * are marked for removal (deferred, safe mid-iteration). Never add here:
+     * adding while iterating would shift the sprite vector under us. */
+    SPRITEMANAGER_ITERATE(spr_idx, spr) {
+        if (spr->type != SpawnPoint || spr->marked_for_removal) {
+            continue;
+        }
+        for (i = 0; i != count; ++i) {
+            if (spr->x == room->spawn_points[i].x && spr->y == room->spawn_points[i].y) {
+                if (spawn_locked[i]) {
+                    SpriteManagerRemove(spr_idx);
+                } else {
+                    has_marker[i] = 1;
+                }
+                break;
+            }
+        }
+    }
+
+    /* Pass 2: add the missing markers for unlocked spawn points. */
+    for (i = 0; i != count; ++i) {
+        if (!spawn_locked[i] && !has_marker[i]) {
+            SafeSpriteAddLow(SpawnPoint, room->spawn_points[i].x, room->spawn_points[i].y);
+        }
     }
 }
 
@@ -397,7 +438,7 @@ static void SetupRoomEntities(const RoomDef* room) {
        spawn marker sharing its row. */
     SpawnDoors(room);
     SpawnPortals(room);
-    SpawnSpawnPoints(room);
+    SyncSpawnMarkers(room);
     SpawnElectricityPickups(room);
     SpawnCoinPickups(room);
 }
@@ -494,28 +535,14 @@ void ApplyDoorSpawnUnlocks(UINT16 door_x, UINT16 door_y) {
         }
         spawn_locked[i] = unlocked ? 0 : 1;
     }
+
+    /* Lock state changed: hide markers of newly locked spawns, show the
+     * newly unlocked ones. */
+    SyncSpawnMarkers(room);
 }
 
 void EnsureRoomSpawnPoints(void) {
-    const RoomDef* room = GetCurrentRoom();
-    UINT8 i;
-    UINT8 spr_idx;
-    Sprite* spr;
-    UINT8 spawn_point_count = 0;
-
-    SPRITEMANAGER_ITERATE(spr_idx, spr) {
-        if (spr->type == SpawnPoint) {
-            spawn_point_count++;
-        }
-    }
-
-    if (spawn_point_count >= room->spawn_point_count) {
-        return;
-    }
-
-    for (i = spawn_point_count; i != room->spawn_point_count; ++i) {
-        SpriteManagerAdd(SpawnPoint, room->spawn_points[i].x, room->spawn_points[i].y);
-    }
+    SyncSpawnMarkers(GetCurrentRoom());
 }
 
 void InitRoomGraphics(UINT8 room_index) {

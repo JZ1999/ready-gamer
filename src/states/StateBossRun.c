@@ -6,8 +6,10 @@
 #include "Scroll.h"
 #include "Keys.h"
 #include "SpriteManager.h"
+#include "SpriteBudget.h"
 #include "BossRun.h"
 #include "SoundEffects.h"
+#include "SoftReset.h"
 #include <rand.h>
 
 /*
@@ -73,6 +75,7 @@ void START() {
 }
 
 void UPDATE() {
+    CHECK_SOFT_RESET();
     /* CameraDriver sits at y=200 (kept off the visible 144px map so its
      * sprite graphic is never seen), but the engine's auto-follow camera
      * (RefreshScroll, called from SpriteManagerUpdate right before this)
@@ -93,7 +96,7 @@ void UPDATE() {
     if (--bullet_timer == 0) {
         bullet_timer = BULLET_SPAWN_INTERVAL;
         if (boss_run_player) {
-            SpriteManagerAdd(BossBullet, scroll_x + SCREENWIDTH - 8, boss_run_player->y);
+            SafeSpriteAdd(BossBullet, scroll_x + SCREENWIDTH - 8, boss_run_player->y); /* NULL if pool full: skip this bullet */
         }
     }
 
@@ -112,7 +115,7 @@ void UPDATE() {
         tile_col = (UINT16)((scroll_x / 8) + (SCREENWIDTH / 8) + 2);
 
         if (!BossRunTileBlocked(tile_col, tile_row)) {
-            SpriteManagerAdd(BasicVirus, tile_col * 8, tile_row * 8);
+            SafeSpriteAddLow(BasicVirus, tile_col * 8, tile_row * 8); /* NULL if pool near-full: skip, next interval retries */
         }
     }
 }

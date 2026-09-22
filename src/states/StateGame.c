@@ -13,12 +13,17 @@
 #include "BankManager.h"
 #include "Rooms.h"
 #include "StateGame.h"
+#include "SoftReset.h"
+#include "SpriteBudget.h"
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
+#define SPAWN_RETRY_DELAY 30    // frames to wait before retrying a spawn when the sprite pool is full
 
 // DEBUG: start directly in this room index for testing — set back to 0 for normal start
 #define DEBUG_START_ROOM 0
+// DEBUG: start at this wave level (1-20) — set back to 1 for normal start
+#define DEBUG_START_LEVEL 1
 // DEBUG: start with the electric weapon already unlocked — set back to 0 for normal start
 #define DEBUG_START_ELECTRIC 0
 // DEBUG: start with this many Ready Coins — set back to 0 for normal start
@@ -62,7 +67,7 @@ UINT8 enemies_to_spawn;
 UINT8 spawn_timer = 0;         // timer for delay
 UINT8 enemies_left_to_spawn = 0; // how many still to spawn
 
-UINT8 next_round_timer = NEXT_ROUND_TIMER;   // frames between levels
+UINT16 next_round_timer = NEXT_ROUND_TIMER;  // frames between levels (UINT16: 300 does not fit in a UINT8)
 UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
 UINT8 pending_room_transition = 0;
@@ -151,21 +156,29 @@ void SpawnEnemies() {
 
             Sprite* virus = NULL;
 
+            /* Sprite pool nearly full (see SpriteBudget.h): don't consume this
+               spawn slot, retry shortly. Without this the wave would count an
+               enemy that never existed and never clear. */
+            if (!POOL_HAS_ROOM_LOW()) {
+                spawn_timer = SPAWN_RETRY_DELAY;
+                return;
+            }
+
             switch(type) {
                 case ENEMY_TYPE_BASIC:
-                    virus = SpriteManagerAdd(BasicVirus, x, y);
+                    virus = SafeSpriteAddLow(BasicVirus, x, y);
                     break;
                 case ENEMY_TYPE_SPEED:
-                    virus = SpriteManagerAdd(SpeedVirus, x, y);
+                    virus = SafeSpriteAddLow(SpeedVirus, x, y);
                     break;
                 case ENEMY_TYPE_TANK:
-                    virus = SpriteManagerAdd(TankVirus, x, y);
+                    virus = SafeSpriteAddLow(TankVirus, x, y);
                     break;
                 case ENEMY_TYPE_BOMBER:
-                    virus = SpriteManagerAdd(BomberVirus, x, y);
+                    virus = SafeSpriteAddLow(BomberVirus, x, y);
                     break;
                 case ENEMY_TYPE_CHARGE:
-                    virus = SpriteManagerAdd(ChargeVirus, x, y);
+                    virus = SafeSpriteAddLow(ChargeVirus, x, y);
                     break;
             }
 
@@ -225,9 +238,9 @@ void START() {
     scroll_offset_x = 0;
     scroll_offset_y = 0;
     current_room = DEBUG_START_ROOM;
-    current_level = 1;
+    current_level = DEBUG_START_LEVEL;
     ready_coins = DEBUG_START_COINS;
-    player_lives = STARTING_LIVES;
+    player_lives = DEBUG_STARTING_LIVES;
     player_electric_attack = DEBUG_START_ELECTRIC;
     pending_room_transition = 0;
     pending_electric_pickup = 0;
@@ -282,6 +295,7 @@ void CheckForPlayerDeath() {
 }
 
 void UPDATE() {
+    CHECK_SOFT_RESET();
     if(waiting_for_start) {
         if(joypad()) {
             // Clear text

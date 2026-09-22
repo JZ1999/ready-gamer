@@ -7,6 +7,7 @@
 #include "SpriteManager.h"
 #include "BossFight.h"
 #include "SoundEffects.h"
+#include "SoftReset.h"
 
 /*
  * Static single-screen arena after the boss-run corridor (StateBossRun hands
@@ -54,6 +55,7 @@ void START() {
 }
 
 void UPDATE() {
+    CHECK_SOFT_RESET();
     UINT8 i;
     Sprite* spr;
     UINT8 boss_count = 0;

@@ -5,6 +5,7 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 
 #define CD_FRAME_TIMER 1
 // Cycles 0,1,2 across chase ticks; slot 6 is free (0-3 are health/frame/
@@ -48,7 +49,7 @@ void UPDATE() {
     if (bomb_timer > 0) {
         SetBombDropTimer(bomb_timer - 1);
     } else {
-        SpriteManagerAdd(Bomb, THIS->x, THIS->y);
+        SafeSpriteAddLow(Bomb, THIS->x, THIS->y); /* NULL if pool near-full: skip this drop */
         SetBombDropTimer(BOMB_DROP_INTERVAL);
     }
 

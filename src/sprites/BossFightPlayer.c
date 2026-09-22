@@ -4,6 +4,7 @@
 #include "Keys.h"
 #include "SpriteManager.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 #include "SoundEffects.h"
 #include "Scroll.h"
 #include "Palette.h"
@@ -145,10 +146,13 @@ void UPDATE() {
     }
 
     if(KEY_PRESSED(J_B) && boss_fight_shoot_cooldown == 0) {
-        Sprite* projectile = SpriteManagerAddEx(SpriteScrew, THIS->x, THIS->y, (UINT8)boss_fight_player_direction);
-        projectile->custom_data[CD_DIR] = (UINT8)boss_fight_player_direction;
-        boss_fight_shoot_cooldown = SHOOT_COOLDOWN;
-        PlayScrewShotSound();
+        Sprite* projectile = SafeSpriteAddEx(SpriteScrew, THIS->x, THIS->y, (UINT8)boss_fight_player_direction);
+        /* NULL = pool full: skip the shot, retry next frame. */
+        if (projectile) {
+            projectile->custom_data[CD_DIR] = (UINT8)boss_fight_player_direction;
+            boss_fight_shoot_cooldown = SHOOT_COOLDOWN;
+            PlayScrewShotSound();
+        }
     }
 }
 

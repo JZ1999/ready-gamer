@@ -5,6 +5,7 @@
 #include "Keys.h"
 #include "SpriteManager.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 #include "Print.h"
 #include "SoundEffects.h"
 #include "Scroll.h"
@@ -292,11 +293,15 @@ void UPDATE() {
 
 	if(KEY_PRESSED(J_B) && shoot_cooldown == 0) {
         UINT8 projectile_type = THIS->custom_data[CD_PLAYER_ELECTRIC] ? ElectricProjectile : SpriteScrew;
-        Sprite* projectile = SpriteManagerAddEx(projectile_type, THIS->x, THIS->y, (UINT8)player_direction);
+        Sprite* projectile = SafeSpriteAddEx(projectile_type, THIS->x, THIS->y, (UINT8)player_direction);
 
-        projectile->custom_data[CD_DIR] = (UINT8)player_direction;
-        shoot_cooldown = SHOOT_COOLDOWN;
-        PlayScrewShotSound();
+        /* NULL = pool full: skip the shot and keep the cooldown clear so the
+           player can retry next frame. */
+        if (projectile) {
+            projectile->custom_data[CD_DIR] = (UINT8)player_direction;
+            shoot_cooldown = SHOOT_COOLDOWN;
+            PlayScrewShotSound();
+        }
     }
 }
 

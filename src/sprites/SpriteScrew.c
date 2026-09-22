@@ -3,6 +3,7 @@
 #include "Scroll.h"
 #include "ZGBMain.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 #include "SoundEffects.h"
 #include "StateGame.h"
 #include "BossFight.h"
@@ -26,7 +27,7 @@ extern Sprite* boss_run_player;
 
 void KillVirus(Sprite* virus, UINT8 virus_id) {
     if (virus && virus->type == BomberVirus) {
-        SpriteManagerAdd(Bomb, virus->x, virus->y);
+        SafeSpriteAdd(Bomb, virus->x, virus->y); /* NULL if pool full: bomb just skipped */
     }
 
     ++enemies_killed;
