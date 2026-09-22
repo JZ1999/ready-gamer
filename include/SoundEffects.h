@@ -46,6 +46,7 @@
 // from code in other banks, so they must use the BANKED calling convention.
 // Without BANKED, callers emit a direct call that only works when the caller
 // happens to share the same bank, which breaks as soon as bankpack relocates them.
+void InitWaveRam(void) BANKED;
 void PlayScrewShotSound(void) BANKED;
 void PlayEnemyHitSound(void) BANKED;
 void PlayDoorOpenSound(void) BANKED;

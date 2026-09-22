@@ -655,3 +655,33 @@ void PlayBossFightMusicStart(void) BANKED {
 void PlayBossFightMusicUpdate(void) BANKED {
     UpdateArenaMusic();
 }
+
+/**
+ * Loads a known waveform into wave RAM (0xFF30-0xFF3F).
+ * Why: every channel-3 sound effect below just turns the wave channel on and
+ * plays whatever wave RAM holds. On a real DMG that memory is random at power
+ * up (emulators usually start it clean), so those effects could sound harsh
+ * on hardware. hUGE songs that use channel 3 overwrite it themselves when they
+ * start, so call this right BEFORE PlayMusic.
+ * Wave RAM may only be written safely with the channel-3 DAC off, so NR30 is
+ * switched off for the copy and restored afterwards.
+ */
+void InitWaveRam(void) BANKED {
+    // Triangle wave: 32 samples of 4 bits, two samples per byte.
+    static const UINT8 triangle_wave[16] = {
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+        0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10
+    };
+    UINT8 i;
+    UINT8 saved_nr30 = NR30_REG;
+
+    // Interrupts off during the copy: the music timer interrupt also drives
+    // channel 3 and must not interleave with these register writes.
+    CRITICAL {
+        NR30_REG = 0x00;
+        for (i = 0; i != 16; ++i) {
+            AUD3WAVE[i] = triangle_wave[i];
+        }
+        NR30_REG = saved_nr30;
+    }
+}
