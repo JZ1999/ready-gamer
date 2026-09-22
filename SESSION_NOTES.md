@@ -1,6 +1,42 @@
 # Session notes (local — read first each session)
 
-Last updated: 2026-09-15. Branch: `feature/map5-spawn-locks`.
+Last updated: 2026-09-21 (end of day). Branch: `feature/map5-spawn-locks`.
+
+## >>> RESUME HERE (2026-09-21, end of day) — full record <<<
+
+**Where we stand:** hardware-ready Release ROM for a physical **MBC5** cartridge exists and passed all headless + emulator checks. **Nothing is committed** (last commit still `2169a7a`). User was playing map 4 in Emulicious ("va todo bien") and stopped for the day. Not flashed yet.
+
+**Final ROM:** `bin/READY_GAMER.gb`, 131072 bytes, SHA-256 `018e40ba8817eb6d92265ba48945bafa9481c63a2d44746dc1a7cdc98d1547ed`. Header: type `0x19` (MBC5), ROM size code 2 (128 KB), no RAM/battery, title `READY GAMER`, DMG-only (CGB flag 0), header checksum and global checksum verified. Permanent copies + SHA256SUMS + test scripts: `E:\Users\Alejandro\Opal\Game-Boy-releases\2026-09-21\` (outside the repo; the `bin/` folder gets wiped by builds).
+
+**Everything changed today (all uncommitted):**
+1. `src/Makefile`: `BINFLAGS += -yt 0x19 -yn "READY GAMER"` (MBC5 + title, after the engine's own `-yt 1`; last one wins) and `CFLAGS += -UNDEBUG` (see 6).
+2. `src/states/StateGame.c`: `next_round_timer` UINT8 -> UINT16. `NEXT_ROUND_TIMER 300` used to overflow to 44 (~0.7 s between waves); now 5 s. Balance knob = the `NEXT_ROUND_TIMER` define (line ~19). User has NOT yet said whether 5 s feels right.
+3. `src/systems/SoundEffects.c` + `include/SoundEffects.h`: `InitWaveRam() BANKED` loads a triangle wave into wave RAM (0xFF30-3F) inside `CRITICAL`; called from `StateMenu.c START()` before `PlayMusic`. Reason: channel-3 SFX play whatever wave RAM holds, random on a real DMG.
+4. `include/SoftReset.h` (new) + `CHECK_SOFT_RESET()` at the top of `UPDATE()` in `StateGame.c`, `StateBossRun.c`, `StateBossFight.c`: A+B+START+SELECT held -> GBDK `reset()`.
+5. `src/systems/Rooms.c`: room 3 (map4) door P1 moved one tile right, tile (2,10) -> (3,10) (user request). It now plugs the 1-tile gap in wall column x=3. Side effect: left corridor (x=1-2) no longer needs P1; the bottom-left dead-end pocket is reachable without paying. Comment `Doors: P1=(3,10)` updated.
+6. **CRITICAL bug fixed:** Release compiled the HUD out. ZGB `Print.h` turns `INIT_CONSOLE`/`DPrintf`/`DPRINT_POS` into no-ops under `NDEBUG` (Release defines it). The game draws its HUD with them, and `INIT_CONSOLE` also calls `SetWindowY`, which makes the LYC interrupt (`LCD_isr`) show sprites. Release therefore showed an empty room: no HUD, no player, no doors. The 09-15 "room 0 has no sprites" report and the 09-18 hardware Release were this same bug. Only Debug builds had ever been played. `CLAUDE.md` got a warning line about it.
+7. Earlier uncommitted work still in the tree from 09-18: sprite pool guard (`include/SpriteBudget.h`, `SafeSpriteAdd*` in BomberVirus, BossFightPlayer, BossRunPlayer, ElectricProjectile, SpritePlayer, SpriteScrew, StateBossRun, StateGame, Rooms.c `SyncSpawnMarkers`). `StateGame.c` DEBUG values are at release values (room 0, level 1, coins 0, `STARTING_LIVES`); `SpriteData.h` damage 1/2.
+
+**Verification done (no crash found):**
+- PyBoy headless (`pip install pyboy pillow numpy`): boot -> menu -> Start -> room 0 with HUD `LEVEL 1 / COINS:0 LIVES:3` and 12 sprites; soft reset returns to menu; 8/8 boots with RAM/VRAM/OAM/HRAM filled with pseudo-random bytes reach menu and a full room 0; 25-40 s random-input play in rooms 0-4 (level 20 in rooms 1-4) with no crash/freeze, peak 15 of 20 sprites; boss run and boss fight 60 s each; Win and GameOver draw and return to menu; room 3 door P1 at the new spot still blocks the horizontal corridor.
+- Emulators: BGB and Emulicious show the same game (user confirmed). Emulicious was open with the final ROM when the user left (they were playing map 4).
+- Static: crt0 zeroes `_DATA` and shadow OAM; stack at 0xDEFF with ~4.7 KB free; only ROM-range write is `0x2000`; `display_off` waits for vblank; `wait_vbl_done` returns at once with LCD off; boss fight worst case ~13 of 20 sprites so unguarded `Boss.c` stays safe.
+- Bank free bytes (final): bank 0 = 248, bank 1 = 1851, bank 2 = 20, bank 3 = 23, banks 4-6 mostly free, bank 7 empty. Maps pinned to banks 2,2,3,3,4,5,6. Any rebuild that changes code can shift things: re-verify header, checksums and bank map, then freeze.
+
+**NOT verified:** sound on real hardware, real DMG LCD ghosting/timing, room-3 frame budget (~18 sprites), the physical cartridge itself, a full manual playthrough of all 5 rooms + boss run + boss fight with Emulicious "Read as random" and the hardware exceptions on (that option is menu-only, not settable via Emulicious.ini).
+
+**Known minor risk (left as is, cosmetic):** an interrupt (music timer, LYC, VBL) landing between the STAT check and the write in `SetTile`/`set_bkg_tile_xy` can push a VRAM write into mode 3, where hardware drops it: rare single wrong background tile until redrawn. Collision uses the room table, so gameplay is unaffected. Fix would need a `di/ei` patch in the ZGB engine (`ZGB_extracted`, gitignored; `ZGB.zip` is tracked).
+
+**Explicit decisions (do not re-litigate):** option C (portal on demand) and D (max 1 Bomber per wave) declined; do NOT touch `src/sprites/Boss.c`; balance numbers are the user's; nothing gets committed/pushed without an explicit OK.
+
+**Open questions for the user tomorrow:** (a) commit now? one commit or several? (b) 5 s between waves OK? (c) which cartridge / flasher, and does it honour the MBC5 header? (d) any exception from Emulicious? (e) move doors P2/P3 too?
+
+**Suggested next steps:** 1) user finishes the manual playthrough on Emulicious (random memory + exceptions on); 2) commit (ask first); 3) confirm the frozen ROM hash; 4) flash `READY_GAMER_FINAL_018e40ba.gb` (never a Debug ROM), mapper MBC5, no RAM; 5) test on the device: menu, music, room 0, a door, portal, boss run, boss fight, reset combo; 6) report anything that differs from the emulator.
+
+**Gotchas learned today:** an emulator holding `bin/` makes the automatic `make clean` fail with "Permission denied" (a Makefile change triggers that clean). Workaround: delete `Release/`, `mkdir Release`, `touch Release/Makefile.uptodate`, then `make build_gb BUILD_TYPE=Release` from `src/` with `ZGB_PATH` set. Building Release wipes the Debug ROM in the shared `bin/`. Python on Windows needs `C:\...` paths. GUI-clicking the user's desktop is unsafe (screen capture shows their other apps); use PyBoy for automated checks. The first "broken Emulicious" captures were most likely the user's own window showing the Release no-HUD bug, not random RAM.
+
+---
+
 
 ## Session 2026-09-15: reverted debug boot to normal game, mobs stuck on walls in map4/room3 maze
 
@@ -543,3 +579,51 @@ Separately, the user reported the **player's bullet** (`SpriteScrew`) going invi
 ### For team review
 
 The substantive logic change this session is entirely in **`src/systems/Rooms.c`** (door/spawn/portal tables for room3, plus the `SetupRoomEntities` reorder). `res/map4.gbm` only changed via earlier sessions' hand-drawing (binary map data, not meaningfully diff-reviewable). The 20-sprite engine cap finding above isn't a diff in this commit — it's a pre-existing latent bug in ZGB itself, worth a heads-up to anyone else building rooms with lots of always-alive sprites (doors/spawns/portals), since it can silently degrade instead of erroring.
+
+## Session 2026-09-18: crash in map4 (room 3) level 14 — sprite pool guard (A) + unlocked-only spawn markers (B)
+
+**Crash**: BGB "invalid opcode" at `ROM1:52CA` (bank 1 = music data), map4/room 3, Level 14, Coins 2, Lives 1. Root cause: ZGB's 20-sprite pool has no bounds check. Room 3 had 12 permanent sprites (player, 3 doors, 7 spawn markers, portal) + 6 enemies + bombs + 2 shots > 20. Map1 with same stats did not crash (5 permanent sprites).
+
+**Fix (uncommitted, user confirmed no crash in that state)**:
+- A: new `include/SpriteBudget.h` — `SafeSpriteAdd/AddEx` (NULL at 20) and `SafeSpriteAddLow` (NULL at 18, keeps 2 slots for player shots). Used for enemies (`StateGame.c`, retry after `SPAWN_RETRY_DELAY`=30 frames when full), periodic bombs (`BomberVirus.c`), death bombs (`SpriteScrew.c`, `ElectricProjectile.c`), player shots with NULL-checks (`SpritePlayer.c`, `BossRunPlayer.c`, `BossFightPlayer.c`).
+- B: `Rooms.c` `SyncSpawnMarkers` — spawn marker sprites exist only for unlocked spawns; called on room load, door open (`ApplyDoorSpawnUnlocks`), wave clear (`EnsureRoomSpawnPoints`). Room 3 permanent sprites 12 -> 7. Markers are visual only (enemy positions come from the table).
+- Declined by user: C (portal on demand), D (max 1 Bomber per wave). User said do not touch `Boss.c`.
+
+**Static worst-case analysis** (fixed + enemies + 1 extra bomb per Bomber + 2 shots): levels 1-16 max 18 in every room; 17-19 up to 19-20 (guard may delay spawns/skip bombs); level 20 21-22 in rooms 1-4 (guard must engage).
+
+**Still open**: `StateBossRun.c:96,115` raw `SpriteManagerAdd` (enemies removed only when off left of camera — can pile up if not killed); `Boss.c` adds/derefs unguarded. Not playtested: levels 17-20 in rooms 1/4, full boss run, rooms 0/1/2/4 re-verify.
+
+**Working tree**: `StateGame.c` DEBUG values (`DEBUG_START_ROOM=3`, `DEBUG_START_LEVEL=14`, `DEBUG_START_COINS=2`, `DEBUG_STARTING_LIVES=1`) must be reverted (3 -> 0, 14 -> 1, 2 -> 0, 1 -> `STARTING_LIVES`) before committing. Ask before committing.
+
+## Session 2026-09-18 (end of day): Release ROM built for physical cartridge — hardware risk review pending 2026-09-19
+
+- Guarded `StateBossRun.c` adds (`SafeSpriteAdd` for bullets, `SafeSpriteAddLow` for enemies); `StateGame.c` DEBUG macros back to release values (room 0, level 1, coins 0, `STARTING_LIVES`).
+- Clean Release build: `bin/READY_GAMER.gb`, 128 KB, MBC1 (type 01), no RAM, header + global checksums valid. Launched in BGB. **Not committed.**
+- **Risks to review next session** (full detail in the memory file `project_ready_gamer_hardware_release.md`):
+  1. `next_round_timer` is `UINT8` but `NEXT_ROUND_TIMER` = 300 -> overflows to 44 (warning 158): ~0.7 s between waves, pre-existing. Not changed — balance decision.
+  2. Banks 2 and 3 have 21 and 5 bytes free — freeze the ROM after testing.
+  3. Header title empty (cosmetic).
+  4. Real DMG boots with random RAM — test in SameBoy/mGBA; uninitialized locals in old code not audited.
+  5. Release not fully played: rooms 0/1/2/4, levels 17-20, boss run, boss fight (`Boss.c` intentionally untouched per user).
+- Decisions: C (portal on demand) and D (1 Bomber per wave) declined; do not touch `Boss.c`.
+
+## Session 2026-09-21: hardware-ready Release build (MBC5 cartridge) — uncommitted
+
+Built `bin/READY_GAMER.gb` (Release, 128 KB, SHA-256 `e45bfbc9...` (after the HUD fix below); backup copy kept outside the repo). Changes, all uncommitted on top of the 09-18 sprite-pool work:
+- **Header** (`src/Makefile`, `BINFLAGS += -yt 0x19 -yn "READY GAMER"` after the engine include): type MBC5 (0x19), title `READY GAMER`, header checksum 0x37 and global A915 verified. Game bank switching only writes 0x2000 (8-bit bank), which MBC5 and MBC1 treat the same; banks used are 1-6, never 0. Changing the Makefile forces a full `make clean` (wipes shared `bin/`, so the Debug ROM is gone until rebuilt).
+- **`next_round_timer`** (`StateGame.c`) UINT8 -> UINT16: `NEXT_ROUND_TIMER 300` used to overflow to 44 (~0.7 s between waves), now the intended 300 (5 s). Balance change: set `NEXT_ROUND_TIMER` to another value if 5 s feels slow. Warning 158 gone.
+- **Wave RAM** (`SoundEffects.c` `InitWaveRam() BANKED`, called from `StateMenu.c START()` before `PlayMusic`): channel-3 SFX only turn the wave channel on and play whatever wave RAM holds, which is random on a real DMG. Loads a triangle wave (NR30 off during the copy, restored after; copy runs inside `CRITICAL` so the music timer ISR cannot interleave).
+- **Soft reset** (`include/SoftReset.h`, `CHECK_SOFT_RESET()` at the top of `UPDATE()` in `StateGame`, `StateBossRun`, `StateBossFight`): A+B+START+SELECT held -> GBDK `reset()`. A cartridge has no reset button.
+- Free bytes after build: bank 0 = 248, bank 2 = 16, bank 3 = 8, banks 4-6 mostly empty. Freeze the ROM after the last test.
+
+**Not yet verified in a running emulator** (nothing was played): test in Emulicious (`ZGB_extracted/ZGB/env/emulicious`) with random uninitialized memory and the exceptions for inaccessible VRAM/OAM/palette, LCD off outside vblank, OAM bug, wave RAM corruption, bus conflict with OAM DMA, non-standard MBC address. The BGB "inaccessible VRAM" stop when entering map5 (2026-09 note above) is NOT proven harmless on hardware: a write during mode 3 is dropped. `SetTile` waits for STAT correctly; the flagged routine is unidentified.
+
+**Second review (same day), findings:** clean rebuild is reproducible (same hash twice). No writes to ROM/MBC addresses except `0x2000`; the only LCD-off path is GBDK's `display_off` (waits for vblank) and `wait_vbl_done` returns at once when the LCD is off, so the room-transition sequence cannot hang. Boss fight worst case is about 13 of 20 sprites (shots limited by 100-frame cooldown vs 120-frame life, max 2 bosses), so unguarded `Boss.c` adds stay safe without touching it. **Corrected diagnosis of the BGB "inaccessible VRAM" stop:** `set_vram_byte`/`set_bkg_tile_xy` (GBDK) and ZGB `SetTile` check STAT bit 1 and then write, but an interrupt (music timer, LYC/STAT, VBL) landing between the check and the write can push the write into mode 3, where hardware drops it. Effect: rare single wrong background tile until that cell is redrawn; game logic uses the room tile table, so collisions are unaffected. Not fixed (would need a `di/ei` in the engine's `SetTile`, i.e. patching ZGB). Frame budget (room 3 with ~18 sprites) still unmeasured.
+
+**CRITICAL FIX (same day): the Release ROM had no HUD and no sprites.** Found because the user saw an empty room 0 in BGB and Emulicious. ZGB's `Print.h` compiles `INIT_CONSOLE`/`DPrintf`/`DPRINT_POS` to nothing when `NDEBUG` is defined (Release defines it). This game draws its HUD (Level/Coins/Lives) with them, and `INIT_CONSOLE` is also what calls `SetWindowY`, which makes ZGB's LYC interrupt (`LCD_isr`) show sprites. In Release the menu's `WY=144`/`LYC=160` stayed, the interrupt never fired and sprites stayed hidden (the 09-15 "room 0 shows no sprites" report and the 09-18 hardware Release had the same bug; only Debug builds had been played). Fix: `CFLAGS += -UNDEBUG` in `src/Makefile`. Now WY=128, LYC toggles, HUD and sprites show.
+
+**Headless verification (PyBoy, `pip install pyboy`; scripts are in the session scratchpad, not the repo):** boot -> menu -> Start -> room 0 shows HUD + 12 sprites; A+B+Start+Select returns to the menu; 8 of 8 boots with random RAM/VRAM/OAM/HRAM (ROM stub patched in) reach the menu and a full room 0; random-input play of 25-40 s in rooms 0-4 (level 20 in rooms 1-4) never crashed or froze and peaked at 15 of 20 sprites; boss run and boss fight run 60 s; Win and GameOver screens draw and return to the menu. Not covered: sound, real DMG timing/LCD, real cartridge.
+
+Build note: if BGB has `bin/` open, `make clean` fails with "Permission denied" (Makefile changes trigger an automatic clean). Workaround used: delete `Release/`, `mkdir Release`, `touch Release/Makefile.uptodate`, then `make build_gb BUILD_TYPE=Release`.
+
+**Room 3 (map4) door P1 moved one tile right** (user request): `Rooms.c` `room3_doors[0]` tile x 2 -> 3, i.e. it now plugs the 1-tile-wide gap in the wall column x=3 (rows 10-11) instead of sitting in the 2-wide left corridor. Checked headless: the door still blocks the horizontal corridor at rows 10-11. Side effect: the left corridor (x=1-2) no longer needs P1, so the dead-end pocket at the bottom-left (S7 area) is reachable without opening it. New ROM SHA-256 starts `018e40ba`.
