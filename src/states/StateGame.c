@@ -245,6 +245,15 @@ void START() {
     pending_room_transition = 0;
     pending_electric_pickup = 0;
 
+    /* Wipe the full 32x32 VRAM background tilemap before drawing the room.
+     * The room's own scroll streams in tiles only near the camera, so any
+     * leftover text a previous state wrote straight to background tiles
+     * (StateGameOver/StateWin's "PRESS A", via PRINT_BKG) survives in the
+     * wrapped-around area outside what's been scrolled over yet, and can
+     * resurface as stray glyphs mid-room once the camera later reaches that
+     * wrapped position. Display is already off here (see main()'s loop). */
+    fill_bkg_rect(0, 0, 32, 32, 0);
+
     InitRoomScrollFromTable(current_room);
 
     INIT_CONSOLE(font, 2);
