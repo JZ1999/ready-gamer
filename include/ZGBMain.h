@@ -10,6 +10,8 @@ _STATE(StateMenu)\
 _STATE(StateGame)\
 _STATE(StateGameOver)\
 _STATE(StateWin)\
+_STATE(StateBossRun)\
+_STATE(StateBossFight)\
 STATE_DEF_END
 
 #define SPRITES \
@@ -27,6 +29,14 @@ _SPRITE_DMG(NextLevelPortal, spawner)\
 _SPRITE_DMG(ElectricProjectile, screw)\
 _SPRITE_DMG(ElectricityPickup, electricity)\
 _SPRITE_DMG(CoinsPickup, coins)\
+_SPRITE_DMG(CameraDriver, spawner)\
+_SPRITE_DMG(BossRunPlayer, player)\
+_SPRITE_DMG(BossBullet, bomb)\
+_SPRITE_DMG(BossFightPlayer, player)\
+_SPRITE_DMG(Boss, boss)\
+_SPRITE_DMG(BossBulletAimed, bomb)\
+_SPRITE_DMG(BossBulletDiagonal, bomb)\
+_SPRITE_DMG(BossSwordHitbox, slash)\
 SPRITE_DEF_END
 
 #include "ZGBMain_Init.h"

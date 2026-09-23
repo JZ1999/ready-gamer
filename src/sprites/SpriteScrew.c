@@ -3,8 +3,11 @@
 #include "Scroll.h"
 #include "ZGBMain.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 #include "SoundEffects.h"
 #include "StateGame.h"
+#include "BossFight.h"
+#include "BossRun.h"
 
 #define MAX_SPRITES 20
 
@@ -19,10 +22,12 @@
 
 extern UINT8 enemies_killed;
 extern UINT16 ready_coins;
+extern Sprite* boss_fight_player;
+extern Sprite* boss_run_player;
 
 void KillVirus(Sprite* virus, UINT8 virus_id) {
     if (virus && virus->type == BomberVirus) {
-        SpriteManagerAdd(Bomb, virus->x, virus->y);
+        SafeSpriteAdd(Bomb, virus->x, virus->y); /* NULL if pool full: bomb just skipped */
     }
 
     ++enemies_killed;
@@ -61,12 +66,33 @@ void START() {
 }
 
 void UPDATE() {
-    // Movement based on direction
-    switch(THIS->custom_data[CD_DIR]) {
-        case 0: SafeTranslateSprite(THIS, 0, -1); break; // Up
-        case 1: SafeTranslateSprite(THIS, 0, 1); break;  // Down
-        case 2: SafeTranslateSprite(THIS, -1, 0); break; // Left
-        case 3: SafeTranslateSprite(THIS, 1, 0); break;  // Right
+    // Movement based on direction. In the boss-fight arena (StateBossFight)
+    // and the auto-scroll corridor (StateBossRun) there's no active room, so
+    // SafeTranslateSprite's room-tile collision reads stale/wrong data and
+    // can block the bullet mid-flight — route through that mode's own
+    // collision instead, same as every other boss sprite (see the
+    // boss_fight_player/boss_run_player pattern used throughout this project).
+    if (boss_fight_player) {
+        switch(THIS->custom_data[CD_DIR]) {
+            case 0: BossFightTranslateSprite(THIS, 0, -1); break; // Up
+            case 1: BossFightTranslateSprite(THIS, 0, 1); break;  // Down
+            case 2: BossFightTranslateSprite(THIS, -1, 0); break; // Left
+            case 3: BossFightTranslateSprite(THIS, 1, 0); break;  // Right
+        }
+    } else if (boss_run_player) {
+        switch(THIS->custom_data[CD_DIR]) {
+            case 0: BossRunTranslateSprite(THIS, 0, -1); break; // Up
+            case 1: BossRunTranslateSprite(THIS, 0, 1); break;  // Down
+            case 2: BossRunTranslateSprite(THIS, -1, 0); break; // Left
+            case 3: BossRunTranslateSprite(THIS, 1, 0); break;  // Right
+        }
+    } else {
+        switch(THIS->custom_data[CD_DIR]) {
+            case 0: SafeTranslateSprite(THIS, 0, -1); break; // Up
+            case 1: SafeTranslateSprite(THIS, 0, 1); break;  // Down
+            case 2: SafeTranslateSprite(THIS, -1, 0); break; // Left
+            case 3: SafeTranslateSprite(THIS, 1, 0); break;  // Right
+        }
     }
 
     // === ENEMY COLLISION ===
@@ -93,6 +119,22 @@ void UPDATE() {
                 SpriteManagerRemove(i);       // Defuse bomb
                 SpriteManagerRemove(THIS_IDX); // Remove screw
                 return;
+			}
+		}
+		if (spr->type == Boss) {
+			// Not IsEnemyType/KillVirus: that path does coin/wave-counter
+			// bookkeeping that doesn't apply in the boss arena and can't run
+			// the phase-2 split-on-death logic. Boss.c owns its own death
+			// handling (checked every frame once its HP hits 0).
+			if (CheckCollision(THIS, spr)) {
+				if (spr->custom_data[0] > PROJECTILE_DAMAGE_NORMAL) { // CD_BOSS_HEALTH, Boss.c
+					spr->custom_data[0] -= PROJECTILE_DAMAGE_NORMAL;
+				} else {
+					spr->custom_data[0] = 0;
+				}
+				PlayEnemyHitSound();
+				SpriteManagerRemove(THIS_IDX); // Remove screw
+				return;
 			}
 		}
 	}

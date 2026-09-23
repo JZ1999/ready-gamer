@@ -7,6 +7,7 @@
 #include "main.h"
 
 #include <gb/gb.h>
+#include "SoundEffects.h"
 
 // Import the simple menu tiles and tilemap for testing
 IMPORT_TILES(MenuTileset);
@@ -41,6 +42,9 @@ void START() {
     SHOW_BKG;
     HIDE_SPRITES;
     
+    // Known wave RAM contents for channel-3 effects (random on real DMG), before any music
+    InitWaveRam();
+
     // Play menu music
     PlayMusic(menu, LOOP);
 }

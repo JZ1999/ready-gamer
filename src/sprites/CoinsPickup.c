@@ -7,7 +7,6 @@
 #include "SoundEffects.h"
 
 #define PICKUP_RANGE 12
-#define COIN_PICKUP_VALUE 5
 
 extern Sprite* scroll_target;
 extern UINT16 ready_coins;
@@ -35,7 +34,7 @@ void UPDATE() {
         return;
     }
 
-    ready_coins += COIN_PICKUP_VALUE;
+    ready_coins += THIS->custom_data[CD_COIN_VALUE];
     PlayCoinCollectSound();
     SpriteManagerRemove(THIS_IDX);
 }

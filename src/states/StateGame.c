@@ -13,9 +13,27 @@
 #include "BankManager.h"
 #include "Rooms.h"
 #include "StateGame.h"
+#include "SoftReset.h"
+#include "SpriteBudget.h"
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
+#define SPAWN_RETRY_DELAY 30    // frames to wait before retrying a spawn when the sprite pool is full
+
+// DEBUG: start directly in this room index for testing — set back to 0 for normal start
+#define DEBUG_START_ROOM 0
+// DEBUG: start at this wave level (1-20) — set back to 1 for normal start
+#define DEBUG_START_LEVEL 1
+// DEBUG: start with the electric weapon already unlocked — set back to 0 for normal start
+#define DEBUG_START_ELECTRIC 0
+// DEBUG: start with this many Ready Coins — set back to 0 for normal start
+#define DEBUG_START_COINS 0
+// DEBUG: initial player_lives override for testing (boss run/fight without
+// dying constantly) — set to STARTING_LIVES for normal boot. Separate from
+// STARTING_LIVES itself so the real balance value isn't touched.
+#define DEBUG_STARTING_LIVES STARTING_LIVES
+
+#define STARTING_LIVES 3
 
 #define SCREEN_WIDTH 160
 #define SCREEN_HEIGHT 144
@@ -49,13 +67,14 @@ UINT8 enemies_to_spawn;
 UINT8 spawn_timer = 0;         // timer for delay
 UINT8 enemies_left_to_spawn = 0; // how many still to spawn
 
-UINT8 next_round_timer = NEXT_ROUND_TIMER;   // frames between levels
+UINT16 next_round_timer = NEXT_ROUND_TIMER;  // frames between levels (UINT16: 300 does not fit in a UINT8)
 UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
 UINT8 pending_room_transition = 0;
 UINT8 pending_electric_pickup = 0;
 
 UINT16 ready_coins = 0; // Player's currency
+UINT8 player_lives = DEBUG_STARTING_LIVES;
 
 /*
  * 20 wave tables — difficulty ramps by count + enemy mix.
@@ -103,7 +122,7 @@ UINT8 enemy_spawn_index = 0;
 void SyncGameHud(void) {
     INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d       ", ready_coins);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 }
 
 static void ClampLevel(void) {
@@ -130,28 +149,36 @@ void StartRoomEnemyWave(void) {
 void SpawnEnemies() {
      if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
         if (--spawn_timer == 0) {
-            UINT8 x, y;
+            UINT16 x, y;
             GetRandomSpawnPositionFromTable(&x, &y);
 
             UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
 
             Sprite* virus = NULL;
 
+            /* Sprite pool nearly full (see SpriteBudget.h): don't consume this
+               spawn slot, retry shortly. Without this the wave would count an
+               enemy that never existed and never clear. */
+            if (!POOL_HAS_ROOM_LOW()) {
+                spawn_timer = SPAWN_RETRY_DELAY;
+                return;
+            }
+
             switch(type) {
                 case ENEMY_TYPE_BASIC:
-                    virus = SpriteManagerAdd(BasicVirus, x, y);
+                    virus = SafeSpriteAddLow(BasicVirus, x, y);
                     break;
                 case ENEMY_TYPE_SPEED:
-                    virus = SpriteManagerAdd(SpeedVirus, x, y);
+                    virus = SafeSpriteAddLow(SpeedVirus, x, y);
                     break;
                 case ENEMY_TYPE_TANK:
-                    virus = SpriteManagerAdd(TankVirus, x, y);
+                    virus = SafeSpriteAddLow(TankVirus, x, y);
                     break;
                 case ENEMY_TYPE_BOMBER:
-                    virus = SpriteManagerAdd(BomberVirus, x, y);
+                    virus = SafeSpriteAddLow(BomberVirus, x, y);
                     break;
                 case ENEMY_TYPE_CHARGE:
-                    virus = SpriteManagerAdd(ChargeVirus, x, y);
+                    virus = SafeSpriteAddLow(ChargeVirus, x, y);
                     break;
             }
 
@@ -195,7 +222,7 @@ void CheckForNextLevel() {
 
 
 void LoadLevel(UINT8 level) {
-    SpawnRoomFromTable(0);
+    SpawnRoomFromTable(current_room);
     current_level = level;
     ClampLevel();
     StartRoomEnemyWave();
@@ -210,20 +237,30 @@ void START() {
     last_bg_pal_loaded = 0;
     scroll_offset_x = 0;
     scroll_offset_y = 0;
-    current_room = 0;
-    current_level = 1;
-    ready_coins = 0;
-    player_electric_attack = 0;
+    current_room = DEBUG_START_ROOM;
+    current_level = DEBUG_START_LEVEL;
+    ready_coins = DEBUG_START_COINS;
+    player_lives = DEBUG_STARTING_LIVES;
+    player_electric_attack = DEBUG_START_ELECTRIC;
     pending_room_transition = 0;
     pending_electric_pickup = 0;
 
-    InitRoomScrollFromTable(0);
+    /* Wipe the full 32x32 VRAM background tilemap before drawing the room.
+     * The room's own scroll streams in tiles only near the camera, so any
+     * leftover text a previous state wrote straight to background tiles
+     * (StateGameOver/StateWin's "PRESS A", via PRINT_BKG) survives in the
+     * wrapped-around area outside what's been scrolled over yet, and can
+     * resurface as stray glyphs mid-room once the camera later reaches that
+     * wrapped position. Display is already off here (see main()'s loop). */
+    fill_bkg_rect(0, 0, 32, 32, 0);
+
+    InitRoomScrollFromTable(current_room);
 
     INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 0);
     DPrintf("       Level %d      ", current_level);
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d       ", ready_coins);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 
     initarand(DIV_REG);
     PlayMusic(track1, LOOP);
@@ -254,10 +291,10 @@ void CheckForPlayerDeath() {
         spawn_timer = ENEMY_SPAWN_DELAY;
         enemy_spawn_index = 0;
         current_level = 1;
-        current_room = 0;
-        ready_coins = 0;
+        current_room = DEBUG_START_ROOM;
+        ready_coins = DEBUG_START_COINS;
         player_electric_attack = 0;
-        
+
         // Clear the screen and show restart message
         DPRINT_POS(0, 0);
         DPrintf("   GAME OVER!   ");
@@ -267,6 +304,7 @@ void CheckForPlayerDeath() {
 }
 
 void UPDATE() {
+    CHECK_SOFT_RESET();
     if(waiting_for_start) {
         if(joypad()) {
             // Clear text
@@ -279,7 +317,7 @@ void UPDATE() {
 
     // Check if player is still alive
     CheckForPlayerDeath();
-    
+
     // If waiting for restart, don't continue with game logic
     if(waiting_for_start) {
         return;
@@ -290,9 +328,20 @@ void UPDATE() {
 
         pending_room_transition = 0;
 
-        if (next_room >= room_count) {
-            /* Cleared final room portal → win / raffle screen */
-            SetState(StateWin);
+        /* MAX_ROOMS (compile-time constant), not room_count: room_count is a
+         * ROM const that lives in Rooms.c's own bank, and reading it directly
+         * from here (StateGame.c's bank) is a cross-bank read with no bank
+         * switch — it can silently read whatever byte happens to be at that
+         * address in THIS bank instead. That let next_room=5 slip past this
+         * check into LoadRoomFromTable(5), which sets current_room=5 with no
+         * bounds check of its own (see ZGBMain.c) — an invalid room that
+         * later made CheckForPlayerDeath's sprite scan misfire (GAME OVER
+         * printed while still in-room, root cause of the "crash entering
+         * autoscroll" report). */
+        if (next_room >= MAX_ROOMS) {
+            /* Cleared final room portal → boss run; it calls SetState(StateWin)
+             * itself once the corridor's far end is reached. */
+            SetState(StateBossRun);
             return;
         }
 
@@ -330,7 +379,7 @@ void UPDATE() {
     }
 
     DPRINT_POS(0, 1);
-    DPrintf("Ready Coins: %d       ", ready_coins);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 
     SpawnEnemies();
     

@@ -15,7 +15,7 @@
 
 extern Sprite* scroll_target;
 
-void TakeDamage(Sprite* player);
+void TakeDamage(Sprite* player) BANKED;
 
 void START() {
     SetFrame(THIS, BOMB_FRAME_IDLE);

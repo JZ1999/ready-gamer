@@ -30,15 +30,15 @@ Local arcade play: `http://localhost:3002/game/ready-gamer` (API `http://localho
 ## Layout
 
 ```
-include/          Public headers (ZGBMain.h, Rooms.h, StateGame.h, SoundEffects.h, SpriteData.h)
-src/states/       StateMenu, StateGame, StateGameOver
-src/sprites/      Player, enemies, pickups, doors, portal, bomb, projectiles
+include/          Public headers (ZGBMain.h, Rooms.h, BossRun.h, StateGame.h, SoundEffects.h, SpriteData.h)
+src/states/       StateMenu, StateGame, StateGameOver, StateBossRun, StateWin
+src/sprites/      Player, enemies, pickups, doors, portal, bomb, projectiles; boss run: BossRunPlayer, CameraDriver, BossBullet
 src/systems/      Rooms.c, SoundEffects.c
-src/assets/       Generated/hand tile data (maps, gfx); chargeVirusGfx.c = ChargeVirus art only
-res/              .gbm maps, .gbr sprites (GBTD/GBMB sources)
+src/assets/       Generated/hand-authored tile+map C data (GBTD/GBMB exports)
+res/              .gbm maps (incl. **mapboss**), .gbr sprites (GBTD/GBMB sources)
 ```
 
-States registered in `include/ZGBMain.h`: `StateMenu` → `StateGame` → `StateGameOver`.
+States in `include/ZGBMain.h`: `StateMenu` → `StateGame` → `StateGameOver`; **`StateBossRun`** (finale); **`StateWin`** (raffle code UI).
 
 ## Multi-room system
 
@@ -70,7 +70,24 @@ Spawn table in `StateGame.c` (`level_spawns` / `level_lengths`, **20 waves**):
 | 8–9 | TankVirus |
 | 10–20 | Full mix; pack size and elites ramp up |
 
-After wave 20, `current_level` wraps to 1. Clearing the portal in the **last room** (`map5`) enters `StateWin` (raffle code UI).
+After wave 20, `current_level` wraps to 1. Clearing the portal in the **last room** (`map5`) enters **`StateBossRun`** (auto-scroll corridor on `mapboss`). Reaching the right edge of that map enters **`StateWin`** (raffle code UI, e.g. `RGGBA26`).
+
+## Boss run (finale — WIP content)
+
+Thematically tied to the **Ready Games** video-game store: implied boss (no body sprite); player runs long horizontal **mapboss** while dodging bullets and surviving camera crush.
+
+| System | Location |
+|--------|----------|
+| State + bullets | `src/states/StateBossRun.c` |
+| Auto-scroll | `src/sprites/CameraDriver.c` (`scroll_target`, ~30 px/s) |
+| Player + i-frame walls | `src/sprites/BossRunPlayer.c` |
+| Boss attack | `src/sprites/BossBullet.c` (bomb gfx) |
+| Collision | `src/ZGBMain.c` — `BossRunTranslateSprite` / `BossRunTranslateSpritePhasing` |
+| Map | `res/mapboss.gbm` — **240×18** tiles; rows 0 and 17 = ceiling/floor |
+
+**Wall rules (boss only — rooms 0–4 unchanged):** normal move uses full collision + diagonal slide; while invincible, phase through **interior** walls in any direction but **not** ceiling/floor rows; when i-frames end inside an interior wall, auto-push **right** until clear.
+
+**Still TODO:** map geometry / store-aisle pacing (see `SESSION_NOTES.md`). **Local debug cheats** (menu→boss, 100 coins, dmg 10) — revert before release.
 
 Sprites (`ZGBMain.h` ↔ gfx basename):
 

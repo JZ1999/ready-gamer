@@ -2,6 +2,7 @@
 #include "Math.h"
 #include "BankManager.h"
 #include "Rooms.h"
+#include "BossRun.h"
 #include "Scroll.h"
 #include "Sprite.h"
 #include "main.h"
@@ -13,18 +14,19 @@ IMPORT_MAP(map2);
 IMPORT_MAP(map3);
 IMPORT_MAP(map4);
 IMPORT_MAP(map5);
+IMPORT_MAP(mapboss);
 
 extern const unsigned char map_map[];
 extern const unsigned char map2_map[];
 extern const unsigned char map3_map[];
 extern const unsigned char map4_map[];
 extern const unsigned char map5_map[];
+extern const unsigned char mapboss_map[];
 
 extern const void __bank_Rooms;
 extern UINT8 last_tile_loaded;
 extern UINT8 last_bg_pal_loaded;
 
-#define MAP_TILE_W 40
 #define SCROLL_TILE_REFRESH_H 22
 #define SCROLL_PAD_LEFT 1
 #define SCROLL_PAD_TOP 1
@@ -78,11 +80,11 @@ UINT8 GetRoomTileFromTable(UINT16 x, UINT16 y) {
 	UINT8 tile;
 	UINT16 index;
 
-	if (x >= MAP_TILE_W || y >= 18) {
+	if (x >= scroll_tiles_w || y >= scroll_tiles_h) {
 		return 0;
 	}
 
-	index = (UINT16)(y * MAP_TILE_W + x);
+	index = (UINT16)(y * scroll_tiles_w + x);
 
 	if (current_room == 4) {
 		PUSH_BANK(BANK(map5));
@@ -142,6 +144,14 @@ static UINT8 CheckPartialBrickAt(UINT8 tile_x, UINT8 tile_y, UINT8 py, UINT8 col
 	return 0;
 }
 
+/* Room-collision-only corner forgiveness (rooms 0-4 via SafeTranslateSprite;
+ * BossRun/BossFight have their own separate collision and are untouched by
+ * this). Full-size hitbox wall checks need pixel-exact alignment to turn a
+ * corner in a tight corridor; insetting the checked box by a few pixels on
+ * every side lets the player (and room enemies, via the same function) clip
+ * slightly into a corner instead of getting stuck when changing direction. */
+#define WALL_COLLISION_MARGIN 3
+
 static UINT8 CheckEdgeMapCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy) {
 	UINT8 tile_x;
 	UINT8 tile_y;
@@ -152,6 +162,11 @@ static UINT8 CheckEdgeMapCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 col
 	INT16 nx;
 	INT16 ny;
 	INT16 pivot;
+
+	px = (UINT16)(px + WALL_COLLISION_MARGIN);
+	py = (UINT16)(py + WALL_COLLISION_MARGIN);
+	coll_w = (UINT8)(coll_w - (WALL_COLLISION_MARGIN * 2));
+	coll_h = (UINT8)(coll_h - (WALL_COLLISION_MARGIN * 2));
 
 	nx = (INT16)px + dx;
 	ny = (INT16)py + dy;
@@ -278,6 +293,131 @@ UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {
 	return result;
 }
 
+/*
+ * StateBossRun support — a single fixed map (mapboss), no room-index
+ * branching needed (unlike the dungeon-crawler room system above). Its own
+ * small collision helper on purpose: mapboss only ever uses tiles 0/1
+ * (floor/wall), no partial-brick tiles, so it doesn't need to share
+ * CheckEdgeMapCollision's partial-brick logic — simpler and independent
+ * of the room-collision code so tuning one can't regress the other.
+ */
+void InitBossRunScroll(void) {
+	InitScroll(BANK(mapboss), &mapboss, scroll_collision_tiles, 0);
+}
+
+UINT8 BossRunTileBlocked(UINT16 x, UINT16 y) {
+	UINT8 tile;
+	UINT16 index;
+
+	if (x >= BOSSRUN_MAP_TILES_W || y >= BOSSRUN_MAP_TILES_H) {
+		return 1; /* out of bounds counts as blocked, keeps sprites on the map */
+	}
+
+	index = (UINT16)(y * BOSSRUN_MAP_TILES_W + x);
+
+	PUSH_BANK(BANK(mapboss));
+	tile = mapboss_map[index];
+	POP_BANK;
+
+	return tile == TILE_FULL_BRICK;
+}
+
+/* Ceiling/floor rows stay solid during invincibility phasing. */
+static UINT8 BossRunEdgeBoundaryBlocked(UINT16 x, UINT16 y) {
+	if (x >= BOSSRUN_MAP_TILES_W || y >= BOSSRUN_MAP_TILES_H) {
+		return 1;
+	}
+
+	if (y == 0 || y == (UINT16)(BOSSRUN_MAP_TILES_H - 1)) {
+		return BossRunTileBlocked(x, y);
+	}
+
+	return 0;
+}
+
+static UINT8 BossRunCheckCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy, UINT8 phasing) {
+	INT16 nx = (INT16)px + dx;
+	INT16 ny = (INT16)py + dy;
+	UINT8 row, col, end_col, feet_row;
+	INT16 pivot;
+
+	if (U_LESS_THAN(nx, 0) || (UINT16)(nx + coll_w - 1) >= BOSSRUN_MAP_PIXELS_W ||
+	    U_LESS_THAN(ny, 0) || (UINT16)(ny + coll_h - 1) >= BOSSRUN_MAP_PIXELS_H) {
+		return 1;
+	}
+
+	feet_row = (UINT8)((ny + coll_h - 1) >> 3);
+
+	if (dx) {
+		if (dx > 0) {
+			pivot = (INT16)(nx + coll_w - 1);
+		} else {
+			pivot = nx;
+		}
+
+		col = (UINT8)(pivot >> 3);
+		row = (UINT8)(ny >> 3);
+
+		while (row <= feet_row) {
+			if (phasing) {
+				if (BossRunEdgeBoundaryBlocked(col, row)) {
+					return 1;
+				}
+			} else if (BossRunTileBlocked(col, row)) {
+				return 1;
+			}
+			row++;
+		}
+	}
+
+	if (dy) {
+		if (dy > 0) {
+			pivot = (INT16)(ny + coll_h - 1);
+		} else {
+			pivot = ny;
+		}
+
+		row = (UINT8)(pivot >> 3);
+		col = (UINT8)(nx >> 3);
+		end_col = (UINT8)((nx + coll_w - 1) >> 3);
+
+		while (col <= end_col) {
+			if (phasing) {
+				if (BossRunEdgeBoundaryBlocked(col, row)) {
+					return 1;
+				}
+			} else if (BossRunTileBlocked(col, row)) {
+				return 1;
+			}
+			col++;
+		}
+	}
+
+	return 0;
+}
+
+static UINT8 BossRunTranslateSpriteEx(Sprite* sprite, INT8 dx, INT8 dy, UINT8 phasing) {
+	UINT16 px = sprite->x;
+	UINT16 py = sprite->y;
+
+	if ((dx || dy) && BossRunCheckCollision(px, py, sprite->coll_w, sprite->coll_h, dx, dy, phasing)) {
+		return 1;
+	}
+
+	if (dx) sprite->x = (UINT16)((INT16)px + dx);
+	if (dy) sprite->y = (UINT16)((INT16)py + dy);
+
+	return 0;
+}
+
+UINT8 BossRunTranslateSprite(Sprite* sprite, INT8 dx, INT8 dy) {
+	return BossRunTranslateSpriteEx(sprite, dx, dy, 0);
+}
+
+UINT8 BossRunTranslateSpritePhasing(Sprite* sprite, INT8 dx, INT8 dy) {
+	return BossRunTranslateSpriteEx(sprite, dx, dy, 1);
+}
+
 void InitRoomScrollFromTable(UINT8 room_index) {
 	if (room_index == 4) {
 		InitScroll(BANK(map5), &map5, scroll_collision_tiles, 0);
@@ -340,7 +480,7 @@ void SpawnRoomFromTable(UINT8 room_index) {
 	POP_BANK;
 }
 
-void GetRandomSpawnPositionFromTable(UINT8* x, UINT8* y) {
+void GetRandomSpawnPositionFromTable(UINT16* x, UINT16* y) {
 	PUSH_BANK((UINT8)(UINT16)&__bank_Rooms);
 	GetRandomSpawnPosition(x, y);
 	POP_BANK;
@@ -349,6 +489,12 @@ void GetRandomSpawnPositionFromTable(UINT8* x, UINT8* y) {
 void EnsureRoomSpawnPointsFromTable(void) {
 	PUSH_BANK((UINT8)(UINT16)&__bank_Rooms);
 	EnsureRoomSpawnPoints();
+	POP_BANK;
+}
+
+void ApplyDoorSpawnUnlocksFromTable(UINT16 door_x, UINT16 door_y) {
+	PUSH_BANK((UINT8)(UINT16)&__bank_Rooms);
+	ApplyDoorSpawnUnlocks(door_x, door_y);
 	POP_BANK;
 }
 

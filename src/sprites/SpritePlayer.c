@@ -5,20 +5,25 @@
 #include "Keys.h"
 #include "SpriteManager.h"
 #include "SpriteData.h"
+#include "SpriteBudget.h"
 #include "Print.h"
 #include "SoundEffects.h"
 #include "Scroll.h"
 #include "Math.h"
 #include "StateGame.h"
+#include "Palette.h"
+#include "Rooms.h"
 
 Direction player_direction;
 
 extern UINT16 ready_coins;
+extern UINT8 player_lives;
 UINT8 player_electric_attack = 0;
 
 #define SHOOT_COOLDOWN       100
 #define PLAYER_MAX_HEALTH    1
 #define INVINCIBILITY_FRAMES 60
+#define RESPAWN_INVINCIBILITY_FRAMES 180 // ~3 seconds at 60fps, longer than a normal hit's i-frames
 #define WALK_ANIM_SPEED      8
 
 #define PLAYER_FRAME_IDLE        0
@@ -128,23 +133,34 @@ Sprite* GetAdjacentDoorForPurchase(Sprite* player) {
     return NULL;
 }
 
-void TakeDamage(Sprite* player) {
+void TakeDamage(Sprite* player) BANKED {
     if(player->custom_data[CD_INVINCIBILITY] > 0) return;
 
     if(player->custom_data[CD_PLAYER_HEALTH] > 0) {
         player->custom_data[CD_PLAYER_HEALTH]--;
-        player->custom_data[CD_INVINCIBILITY] = INVINCIBILITY_FRAMES;
+        PlayPlayerHitSound();
 
         if(player->custom_data[CD_PLAYER_HEALTH] == 0) {
-            UINT8 i;
-            Sprite* spr;
-            SPRITEMANAGER_ITERATE(i, spr) {
-                if (spr->unique_id == THIS->unique_id) {
-                    SpriteManagerRemove(i);
-                    SetState(StateGameOver);
-                    break;
+            if(player_lives > 0) {
+                // Life left: respawn in place (same room/position), just heal up
+                // and grant a longer invincibility window instead of resetting the run.
+                player_lives--;
+                player->custom_data[CD_PLAYER_HEALTH] = PLAYER_MAX_HEALTH;
+                player->custom_data[CD_INVINCIBILITY] = RESPAWN_INVINCIBILITY_FRAMES;
+            } else {
+                // Out of lives: real game over.
+                UINT8 i;
+                Sprite* spr;
+                SPRITEMANAGER_ITERATE(i, spr) {
+                    if (spr->unique_id == player->unique_id) {
+                        SpriteManagerRemove(i);
+                        SetState(StateGameOver);
+                        break;
+                    }
                 }
             }
+        } else {
+            player->custom_data[CD_INVINCIBILITY] = INVINCIBILITY_FRAMES;
         }
     }
 }
@@ -166,6 +182,9 @@ UINT8 HandleDoorInteraction(Sprite* door_sprite) {
     if (ready_coins >= door_cost) {
         ready_coins -= door_cost;
         door_sprite->custom_data[CD_DOOR_STATE] = 1; // Open the door
+        // Re-lock/unlock this room's spawn points per this door's configured
+        // list (no-op for doors that don't define one — see Rooms.c).
+        ApplyDoorSpawnUnlocksFromTable(door_sprite->x, door_sprite->y);
         // Find and remove the door sprite
         UINT8 i;
         Sprite* spr;
@@ -195,11 +214,26 @@ void START() {
     THIS->custom_data[CD_INVINCIBILITY] = 0;
     THIS->custom_data[CD_WALK_TIMER] = 0;
     THIS->custom_data[CD_PLAYER_ELECTRIC] = player_electric_attack;
+
+    // Palette 1 = solid white flash, used to make invincibility frames visible.
+    // Non-zero pixel indices all map to shade 0 (white); true-transparent OBJ
+    // pixels (raw index 0) stay transparent regardless, so the sprite silhouette
+    // just flashes white instead of disappearing.
+    OBP1_REG = PAL_DEF(0, 0, 0, 0);
+    SPRITE_SET_DMG_PALETTE(THIS, 0);
 }
 
 void UPDATE() {
     if(shoot_cooldown > 0) shoot_cooldown--;
     if(THIS->custom_data[CD_INVINCIBILITY] > 0) THIS->custom_data[CD_INVINCIBILITY]--;
+
+    // Flash white every few frames while invincible so the i-frames read as
+    // visible feedback instead of a silent, unexplained "no damage" window.
+    if(THIS->custom_data[CD_INVINCIBILITY] > 0 && (THIS->custom_data[CD_INVINCIBILITY] / 6) % 2 == 0) {
+        SPRITE_SET_DMG_PALETTE(THIS, 1);
+    } else {
+        SPRITE_SET_DMG_PALETTE(THIS, 0);
+    }
 
     // === Collision Detection and Handling ===
     UINT8 i;
@@ -259,11 +293,15 @@ void UPDATE() {
 
 	if(KEY_PRESSED(J_B) && shoot_cooldown == 0) {
         UINT8 projectile_type = THIS->custom_data[CD_PLAYER_ELECTRIC] ? ElectricProjectile : SpriteScrew;
-        Sprite* projectile = SpriteManagerAddEx(projectile_type, THIS->x, THIS->y, (UINT8)player_direction);
+        Sprite* projectile = SafeSpriteAddEx(projectile_type, THIS->x, THIS->y, (UINT8)player_direction);
 
-        projectile->custom_data[CD_DIR] = (UINT8)player_direction;
-        shoot_cooldown = SHOOT_COOLDOWN;
-        PlayScrewShotSound();
+        /* NULL = pool full: skip the shot and keep the cooldown clear so the
+           player can retry next frame. */
+        if (projectile) {
+            projectile->custom_data[CD_DIR] = (UINT8)player_direction;
+            shoot_cooldown = SHOOT_COOLDOWN;
+            PlayScrewShotSound();
+        }
     }
 }
 

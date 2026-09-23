@@ -33,6 +33,9 @@ typedef enum {
 #define CD_DOOR_STATE 0 // 0 = closed, 1 = open
 #define CD_DOOR_COST 1 // Cost in Ready Coins to open the door
 
+// Coin pickup
+#define CD_COIN_VALUE 0 // Ready Coins granted on pickup, set from CoinPickupPlacement
+
 // Player
 #define CD_PLAYER_HEALTH     0
 #define CD_INVINCIBILITY     1

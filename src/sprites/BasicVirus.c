@@ -5,16 +5,56 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
+#include "BossRun.h"
+#include <rand.h>
 
 #define CD_FRAME_TIMER 1
+
+/* Escape-the-corner state, packed into one byte: (steps_remaining << 2) |
+ * direction (0=up,1=down,2=left,3=right). 0 = not wandering. Slots 6/7 are
+ * free for this enemy type (health/frame/blink/move use 0-3, see
+ * SpriteData.h). */
+#define CD_WANDER_STATE 6
+#define CD_STUCK_COUNT  7
+// Cycles 0,1,2 across normal (non-wander) chase ticks — slot 4 is free
+// (BomberVirus is the only virus type that uses it, for its bomb timer).
+#define CD_DIAG_TICK 4
 
 #define ENEMY_SPEED 10
 #define TOTAL_FRAMES 3
 
+/* The greedy chase below only ever steps toward the player on whichever
+ * single axis is misaligned, plus one perpendicular nudge when that's
+ * blocked — enough for open rooms, not enough for a real maze, where an
+ * enemy can end up in a pocket that requires backing away from the player
+ * first. After this many consecutive blocked attempts, give up on greedy
+ * chasing for a while and commit to a random direction instead — a cheap
+ * way out of local dead-ends without a real pathfinder (see
+ * reference_ready_gamer_sprite_pool_limit / SESSION_NOTES for why a full
+ * flow-field pathfinder was tried and reverted before). */
+#define STUCK_THRESHOLD 3
+/* Pixels, not tiles — this maze's corridors are 2 tiles (16px) wide, so a
+ * dead-end pocket can easily be that deep. The original 6px value was
+ * nowhere near enough to actually clear one: the enemy would nudge a
+ * handful of pixels aside, then immediately resume greedy-chasing straight
+ * back into the same trap, which is why the "escape" looked like it wasn't
+ * doing anything. */
+#define WANDER_STEPS 18
+
 extern Sprite* scroll_target;
+
+/* Reused in StateBossRun (see UPDATE()/CustomTranslateSprite below) so the
+ * auto-scroll level can spawn normal level-1 enemies too — same
+ * boss_run_player NULL-guard pattern as SpriteScrew.c/BossBullet.c. NULL in
+ * every other state, so none of this changes normal-room behavior. */
+extern Sprite* boss_run_player;
+void BossRunTakeDamage(Sprite* player) BANKED;
 
 // Custom movement function that checks for partial brick collisions
 static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
+    if (boss_run_player) {
+        return BossRunTranslateSprite(sprite, x, y);
+    }
     // Use the wall avoidance movement function
     extern UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy);
     return EnemyMoveWithWallAvoidance(sprite, x, y);
@@ -24,29 +64,77 @@ void START() {
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 3;
     THIS->custom_data[CD_MOVE_TIMER] = 0;
+    THIS->custom_data[CD_WANDER_STATE] = 0;
+    THIS->custom_data[CD_STUCK_COUNT] = 0;
+    THIS->custom_data[CD_DIAG_TICK] = 0;
     /* Keep alive off-camera (default lim 32 culls on wide maps). */
     THIS->lim_x = 255;
     THIS->lim_y = 255;
 }
 
 void UPDATE() {
+    // In StateBossRun, scroll_target is CameraDriver (an invisible sprite
+    // that just walks itself forward, see that file) — chasing it directly
+    // would mean chasing the camera, not the player. Chase boss_run_player
+    // instead whenever it exists; scroll_target is only the right target in
+    // the normal room game, where it's the player-follow camera target.
+    Sprite* target = boss_run_player ? boss_run_player : scroll_target;
+
+    if (boss_run_player) {
+        // Auto-scroll level: no room, nothing to soft-lock on death, so
+        // just remove enemies once fully scrolled off the left edge instead
+        // of leaving them alive forever off-screen (the 20-sprite pool is
+        // shared project-wide — see reference_ready_gamer_sprite_pool_limit).
+        if ((INT16)THIS->x + 16 < scroll_x) {
+            SpriteManagerRemove(THIS_IDX);
+            return;
+        }
+
+        // BossRunPlayer.c has no generic per-frame enemy-contact scan (the
+        // room game's version of that lives in SpritePlayer.c, which doesn't
+        // run in this state) — so, same pattern as BossBullet.c, this enemy
+        // checks for and deals its own contact damage.
+        if (CheckCollision(THIS, boss_run_player)) {
+            BossRunTakeDamage(boss_run_player);
+        }
+    }
+
     UINT8* move_timer = &THIS->custom_data[CD_MOVE_TIMER];
 
     if ((*move_timer)++ < ENEMY_SPEED) return;
     *move_timer = 0;
 
-    UINT16 dx = 0;
-    UINT16 dy = 0;
+    INT8 dx = 0;
+    INT8 dy = 0;
+    UINT8 wander_state = THIS->custom_data[CD_WANDER_STATE];
 
-    // Determine movement direction toward player
-    if(scroll_target->x > THIS->x + 1) dx = 1;
-    else if(scroll_target->x < THIS->x - 1) dx = -1;
-    else if(scroll_target->y > THIS->y + 1) dy = 1;
-    else if(scroll_target->y < THIS->y - 1) dy = -1;
+    if (wander_state) {
+        // Mid-escape from a stuck pocket — keep committing to the same
+        // random direction instead of the greedy chase below, so a couple
+        // of local wall-avoidance nudges can't immediately undo it.
+        UINT8 wander_dir = wander_state & 3;
+        switch (wander_dir) {
+            case 0: dy = -1; break;
+            case 1: dy = 1; break;
+            case 2: dx = -1; break;
+            default: dx = 1; break;
+        }
+    } else {
+        // Every 3rd normal chase tick, also move on Y this same tick instead
+        // of only correcting X first — steps diagonally toward the player so
+        // it keeps closing both axes at once ("centering" on the player)
+        // rather than fully aligning X before ever touching Y.
+        UINT8 diag_tick = THIS->custom_data[CD_DIAG_TICK];
+        THIS->custom_data[CD_DIAG_TICK] = (diag_tick + 1) % 3;
 
-    // Tile collision check
-    UINT16 new_x = THIS->x + dx;
-    UINT16 new_y = THIS->y + dy;
+        if(target->x > THIS->x + 1) dx = 1;
+        else if(target->x < THIS->x - 1) dx = -1;
+
+        if (diag_tick == 2 || !dx) {
+            if(target->y > THIS->y + 1) dy = 1;
+            else if(target->y < THIS->y - 1) dy = -1;
+        }
+    }
 
     UINT8 frame = THIS->anim_frame;
 
@@ -66,7 +154,44 @@ void UPDATE() {
     }
 
     SetFrame(THIS, frame);
-    CustomTranslateSprite(THIS, dx, dy);
+
+    UINT8 blocked;
+    if (dx && dy) {
+        // Diagonal step — move each axis with its own call (same approach
+        // SpritePlayer.c uses for diagonal input) so a wall on one axis
+        // doesn't cancel progress on the other; only really "blocked" if
+        // neither axis moved.
+        UINT8 blocked_x = CustomTranslateSprite(THIS, dx, 0);
+        UINT8 blocked_y = CustomTranslateSprite(THIS, 0, dy);
+        blocked = blocked_x && blocked_y;
+    } else {
+        blocked = CustomTranslateSprite(THIS, dx, dy);
+    }
+
+    if (blocked) {
+        if (wander_state) {
+            // Already escaping and hit a second wall — pick a fresh random
+            // direction right away instead of grinding against this one for
+            // the rest of the committed run.
+            wander_state = (WANDER_STEPS << 2) | (rand() % 4);
+        } else if (THIS->custom_data[CD_STUCK_COUNT] + 1 >= STUCK_THRESHOLD) {
+            THIS->custom_data[CD_STUCK_COUNT] = 0;
+            wander_state = (WANDER_STEPS << 2) | (rand() % 4);
+        } else {
+            THIS->custom_data[CD_STUCK_COUNT]++;
+        }
+    } else if (wander_state) {
+        // Wander step succeeded — count it down, dropping back to normal
+        // chase once the committed run finishes.
+        UINT8 steps_left = (wander_state >> 2) - 1;
+        wander_state = steps_left ? ((steps_left << 2) | (wander_state & 3)) : 0;
+        THIS->custom_data[CD_STUCK_COUNT] = 0;
+    } else {
+        // Normal chase step succeeded — no longer stuck.
+        THIS->custom_data[CD_STUCK_COUNT] = 0;
+    }
+
+    THIS->custom_data[CD_WANDER_STATE] = wander_state;
 }
 
 void DESTROY() {
