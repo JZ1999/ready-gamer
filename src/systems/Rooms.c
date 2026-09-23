@@ -57,6 +57,12 @@ typedef struct {
     UINT16 y;
 } PickupPlacement;
 
+typedef struct {
+    UINT16 x;
+    UINT16 y;
+    UINT8 value; /* Ready Coins granted on pickup */
+} CoinPickupPlacement;
+
 struct RoomDef {
     RoomMap scroll;
     UINT16 player_x;
@@ -69,7 +75,7 @@ struct RoomDef {
     UINT8 portal_count;
     const PickupPlacement* electricity_pickups;
     UINT8 electricity_pickup_count;
-    const PickupPlacement* coin_pickups;
+    const CoinPickupPlacement* coin_pickups;
     UINT8 coin_pickup_count;
 };
 
@@ -94,9 +100,9 @@ static const DoorPlacement room1_doors[] = {
 };
 
 static const SpawnPointPlacement room1_spawns[] = {
-    { 20, 25, 0 },
-    { 100, 80, 0 },
-    { 50, 90, 0 },
+    { 16, 24, 0 },  /* aligned to tile (2,3), was (20,25) */
+    { 96, 80, 0 },  /* aligned to tile (12,10), was (100,80) */
+    { 48, 88, 0 },  /* aligned to tile (6,11), was (50,90) */
 };
 
 static const PortalPlacement room1_portals[] = {
@@ -112,17 +118,17 @@ static const DoorPlacement room2_doors[] = {
 };
 
 static const SpawnPointPlacement room2_spawns[] = {
-    { 20, 20, 0 },
-    { 100, 80, 0 },
-    { 50, 90, 0 },
+    { 16, 20, 0 },  /* x aligned to tile col 2 (was 20, off-grid) */
+    { 96, 88, 0 },  /* moved to tile (12,11) */
+    { 16, 88, 0 },  /* moved to tile (2,11) */
 };
 
 static const PortalPlacement room2_portals[] = {
     { 135, 52 },
 };
 
-static const PickupPlacement room2_coins[] = {
-    { 72, 100 },
+static const CoinPickupPlacement room2_coins[] = {
+    { 56, 88, 5 },  /* moved to tile (7,11); 5 = previous fixed COIN_PICKUP_VALUE */
 };
 
 /*
@@ -246,6 +252,10 @@ static const PortalPlacement room4_portals[] = {
     { 46 * 8, 15 * 8 },
 };
 
+static const CoinPickupPlacement room4_coins[] = {
+    { 28 * 8, 15 * 8, 3 },
+};
+
 /*
  * To add a room:
  *   1. Create res/mapN.gbm
@@ -298,7 +308,7 @@ static const RoomDef rooms[MAX_ROOMS] = {
         room4_spawns, ARRAY_LEN(room4_spawns),
         room4_portals, ARRAY_LEN(room4_portals),
         NULL, 0,
-        NULL, 0,
+        room4_coins, ARRAY_LEN(room4_coins),
     },
 };
 
@@ -427,7 +437,11 @@ static void SpawnCoinPickups(const RoomDef* room) {
     UINT8 i;
 
     for (i = 0; i != room->coin_pickup_count; ++i) {
-        SpriteManagerAdd(CoinsPickup, room->coin_pickups[i].x, room->coin_pickups[i].y);
+        const CoinPickupPlacement* coin = &room->coin_pickups[i];
+        Sprite* sprite = SpriteManagerAdd(CoinsPickup, coin->x, coin->y);
+        if (sprite) {
+            sprite->custom_data[CD_COIN_VALUE] = coin->value;
+        }
     }
 }
 
