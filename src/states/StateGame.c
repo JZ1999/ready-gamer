@@ -285,7 +285,7 @@ void CheckForPlayerDeath() {
         current_room = DEBUG_START_ROOM;
         ready_coins = DEBUG_START_COINS;
         player_electric_attack = 0;
-        
+
         // Clear the screen and show restart message
         DPRINT_POS(0, 0);
         DPrintf("   GAME OVER!   ");
@@ -319,7 +319,17 @@ void UPDATE() {
 
         pending_room_transition = 0;
 
-        if (next_room >= room_count) {
+        /* MAX_ROOMS (compile-time constant), not room_count: room_count is a
+         * ROM const that lives in Rooms.c's own bank, and reading it directly
+         * from here (StateGame.c's bank) is a cross-bank read with no bank
+         * switch — it can silently read whatever byte happens to be at that
+         * address in THIS bank instead. That let next_room=5 slip past this
+         * check into LoadRoomFromTable(5), which sets current_room=5 with no
+         * bounds check of its own (see ZGBMain.c) — an invalid room that
+         * later made CheckForPlayerDeath's sprite scan misfire (GAME OVER
+         * printed while still in-room, root cause of the "crash entering
+         * autoscroll" report). */
+        if (next_room >= MAX_ROOMS) {
             /* Cleared final room portal → boss run; it calls SetState(StateWin)
              * itself once the corridor's far end is reached. */
             SetState(StateBossRun);
