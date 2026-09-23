@@ -275,3 +275,6 @@ ZGB/
 bin/
 Debug/
 DebugColor/
+
+# Local session entry point (per-user, never pushed)
+INIT.md

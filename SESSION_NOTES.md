@@ -1,6 +1,26 @@
 # Session notes (local — read first each session)
 
-Last updated: 2026-09-21 (end of day). Branch: `feature/map5-spawn-locks`.
+Last updated: 2026-09-23. Branch: `feature/map5-spawn-locks`.
+
+## >>> RESUME HERE (2026-09-23) — full record <<<
+
+**Where we stand:** everything from 09-21/09-22 (below) plus a real crash fix are **committed and pushed** to `origin/feature/map5-spawn-locks` (6 commits, up through `bae231c`). **Not merged to main, no PR opened, not flashed.**
+
+**Real bug found and fixed:** entering the map5→autoscroll portal reliably threw a spurious in-room "GAME OVER! Press any key" instead of transitioning to `StateBossRun` — 100% repro, both BGB and Emulicious, independent of wave/coins, independent of how the player reached map5 (confirmed NOT reproducible booting straight into `StateBossRun` from the menu, which is what pointed at the room→bossrun transition specifically). Root cause: `StateGame.c`'s `next_room >= room_count` compared against `room_count`, a `const UINT8` that physically lives in `Rooms.c`'s own ROM bank — reading it directly from StateGame's own (different) bank with no bank switch is undefined; it can read whatever byte happens to be at that address in the wrong bank. It let `next_room` slip past the check into `LoadRoomFromTable(MAX_ROOMS)`, which sets `current_room = MAX_ROOMS` (invalid, only 0-4 are real rooms) with no bounds check of its own. Debugged by adding a temporary on-screen print (room/level/lives/pool-count) inside `CheckForPlayerDeath()` — it showed `room=5`, the smoking gun. **Fix:** compare against `MAX_ROOMS` (compile-time `#define`) instead of the runtime `room_count` extern. Full technical writeup saved to memory: `reference_gb_bank_switch_hazard.md` (new "reading DATA across banks" section).
+
+**Content changes, same session:** coins now have a per-pickup value (`CoinPickupPlacement` + `custom_data[CD_COIN_VALUE]`, replacing the old single global `COIN_PICKUP_VALUE=5` constant) — added a 3-coin pickup on map5 at tile (28,15). Opened an intentional wall gap in map5 at tiles (42,9)-(43,9). Re-positioned 2 of 3 spawns + the coin on map3 (room2), and tile-aligned all 3 spawns on map2 (room1) — several were sitting at off-grid pixel coordinates from earlier hand-authoring.
+
+**Tool paths found (save future searching):** Emulicious (`ZGB_extracted/ZGB/env/emulicious/Emulicious.exe`) and GBTD/GBMB (`ZGB_extracted/ZGB/env/tools/gbtd22/GBTD.EXE`, `.../gbmb18/GBMB.EXE`) all ship bundled inside the ZGB engine archive, not installed system-wide.
+
+**Known cosmetic bug, not fixed:** stray "A" glyphs from `StateGameOver.c`/`StateWin.c`'s `PRINT_BKG` "PRESS A" text can persist in background VRAM the room game doesn't fully overwrite, becoming visible once the camera later scrolls to that spot. Doesn't affect collision/gameplay.
+
+**Debug scaffolding confirmed clean before the push:** `DEBUG_START_ROOM=0`, `DEBUG_START_LEVEL=1`, `DEBUG_START_COINS=0`, `PROJECTILE_DAMAGE_NORMAL=1`, `PROJECTILE_DAMAGE_ELECTRIC=2`, `StateMenu.c` boots to `StateGame` normally.
+
+**Open questions:** PR to main — when? 5s between waves still not explicitly confirmed as feeling right. Cartridge/flasher for physical hardware still undecided; nothing flashed yet.
+
+**`INIT.md` created this session** — new local (gitignored) per-project entry point per updated global `CLAUDE.md` rules. Read that first from now on, before this file.
+
+---
 
 ## >>> RESUME HERE (2026-09-21, end of day) — full record <<<
 
