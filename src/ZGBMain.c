@@ -3,6 +3,8 @@
 #include "BankManager.h"
 #include "Rooms.h"
 #include "BossRun.h"
+#include "DoorCollision.h"
+#include "StateGame.h"
 #include "Scroll.h"
 #include "Sprite.h"
 #include "main.h"
@@ -150,8 +152,8 @@ static UINT8 CheckPartialBrickAt(UINT8 tile_x, UINT8 tile_y, UINT8 py, UINT8 col
  * this). Full-size hitbox wall checks need pixel-exact alignment to turn a
  * corner in a tight corridor; insetting the checked box by a few pixels on
  * every side lets the player (and room enemies, via the same function) clip
- * slightly into a corner instead of getting stuck when changing direction. */
-#define WALL_COLLISION_MARGIN 3
+ * slightly into a corner instead of getting stuck when changing direction.
+ * WALL_COLLISION_MARGIN lives in StateGame.h (DoorCollision.c reuses it). */
 
 static UINT8 CheckEdgeMapCollision(UINT16 px, UINT16 py, UINT8 coll_w, UINT8 coll_h, INT8 dx, INT8 dy) {
 	UINT8 tile_x;
@@ -261,6 +263,16 @@ UINT8 SafeTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
 	}
 
 	return 0;
+}
+
+/* Room-enemy step: closed doors block like walls, then normal tile
+ * collision. Player uses the same door check (SpritePlayer.c); projectiles
+ * still use plain SafeTranslateSprite and fly through doors. */
+UINT8 EnemyTranslateSprite(Sprite* enemy, INT8 dx, INT8 dy) {
+	if (SpriteBlockedByClosedDoor(enemy, dx, dy)) {
+		return 1;
+	}
+	return SafeTranslateSprite(enemy, dx, dy);
 }
 
 UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {

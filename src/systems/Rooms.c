@@ -137,8 +137,8 @@ static const CoinPickupPlacement room2_coins[] = {
  * tile coordinates (col,row) read directly off GBMB's status bar, then
  * shifted 1 tile left/up per the user's request. player/spawn/portal tiles
  * read from the screenshot against a render of the saved map4.gbm tile data
- * (only need to land on a floor tile). Doors: P1=(3,10), P2=(8,4),
- * P3=(32,7).
+ * (only need to land on a floor tile). Doors (drawn-pixel tile, flush with
+ * the wall, see DOOR_ON_TILE_X): P1=(3,10), P2=(9,4), P3=(33,7).
  *
  * Spawn-lock scheme (inferred from the drawing + a BFS reachability check
  * against the real tile data, same technique as map5):
@@ -194,10 +194,14 @@ static const UINT8 room3_door_p1_unlocks[] = { 0, 3, 5 }; /* S1,S6,S8 */
 static const UINT8 room3_door_p2_unlocks[] = { 1 };       /* S4 */
 static const UINT8 room3_door_p3_unlocks[] = { 6 };       /* S9 */
 
+/* Door sprite x so its drawn pixels (DOOR_HITBOX_X..+W, see SpriteData.h)
+ * start exactly on map tile column COL, flush with the wall it plugs. */
+#define DOOR_ON_TILE_X(COL) ((COL) * 8 - DOOR_HITBOX_X)
+
 static const DoorPlacement room3_doors[] = {
-    { 3 * 8, 10 * 8, 10, room3_door_p1_unlocks, ARRAY_LEN(room3_door_p1_unlocks) }, /* P1 (moved 1 tile right: tile x 2 -> 3) */
-    { 8 * 8, 4 * 8, 10, room3_door_p2_unlocks, ARRAY_LEN(room3_door_p2_unlocks) },  /* P2 */
-    { 32 * 8, 7 * 8, 10, room3_door_p3_unlocks, ARRAY_LEN(room3_door_p3_unlocks) }, /* P3 */
+    { DOOR_ON_TILE_X(3), 10 * 8, 10, room3_door_p1_unlocks, ARRAY_LEN(room3_door_p1_unlocks) }, /* P1: in wall col 3 gap */
+    { DOOR_ON_TILE_X(9), 4 * 8, 10, room3_door_p2_unlocks, ARRAY_LEN(room3_door_p2_unlocks) },  /* P2: on top of wall col 9 */
+    { DOOR_ON_TILE_X(33), 7 * 8, 10, room3_door_p3_unlocks, ARRAY_LEN(room3_door_p3_unlocks) }, /* P3: under row-6 wall start, col 33 */
 };
 
 static const SpawnPointPlacement room3_spawns[] = {
@@ -230,9 +234,9 @@ static const UINT8 room4_door_d3_unlocks[] = { 4, 6, 7 }; /* S5, S7, S8 */
 static const UINT8 room4_door_d1_unlocks[] = { 3, 5, 8 }; /* S4, S6, S9 */
 
 static const DoorPlacement room4_doors[] = {
-    { 26 * 8, 1 * 8, 10, room4_door_d1_unlocks, ARRAY_LEN(room4_door_d1_unlocks) }, /* D1 — second */
-    { 38 * 8, 1 * 8, 10, NULL, 0 }, /* D2 — doesn't gate spawns */
-    { 12 * 8, 15 * 8, 10, room4_door_d3_unlocks, ARRAY_LEN(room4_door_d3_unlocks) }, /* D3 — first */
+    { DOOR_ON_TILE_X(26), 1 * 8, 10, room4_door_d1_unlocks, ARRAY_LEN(room4_door_d1_unlocks) }, /* D1: above wall col 26 (second door) */
+    { DOOR_ON_TILE_X(39), 1 * 8, 10, NULL, 0 }, /* D2: at the end of row-3 wall, col 39 (doesn't gate spawns) */
+    { DOOR_ON_TILE_X(12), 15 * 8, 10, room4_door_d3_unlocks, ARRAY_LEN(room4_door_d3_unlocks) }, /* D3: under wall col 12 (first door) */
 };
 
 static const SpawnPointPlacement room4_spawns[] = {

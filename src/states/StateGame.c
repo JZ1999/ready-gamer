@@ -20,8 +20,8 @@
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
-#define SPAWN_WARN_FRAMES 60   // spawner animates this long before an enemy appears
 #define SPAWN_RETRY_DELAY 30    // frames to wait before retrying a spawn when the sprite pool is full
+#define SPAWN_WARNING_FRAMES 60 // frames the chosen portal flashes before its enemy comes out
 
 // DEBUG: start directly in this room index for testing — set back to 0 for normal start
 #define DEBUG_START_ROOM 0
@@ -125,21 +125,11 @@ const UINT8 level_lengths[MAX_LEVELS] = {
 UINT8 enemy_spawn_index = 0;
 extern UINT8 player_hp; /* SpritePlayer.c, for the HUD */
 
-/* Next spawn position, picked SPAWN_WARN_FRAMES early so its spawner can
- * play a warning animation before the enemy appears. */
-static UINT8 spawn_warned = 0;
-static UINT16 spawn_warn_x;
-static UINT16 spawn_warn_y;
-
-static void WarnSpawnPoint(UINT16 x, UINT16 y) {
-    UINT8 i;
-    Sprite* spr;
-    SPRITEMANAGER_ITERATE(i, spr) {
-        if (spr->type == SpawnPoint && spr->x == x && spr->y == y) {
-            spr->custom_data[1] = SPAWN_WARN_FRAMES; /* SpawnPoint.c: warning animation */
-        }
-    }
-}
+// Next spawn position, chosen SPAWN_WARNING_FRAMES early so its portal can
+// warn the player. Cleared on every wave/room reset (old room's position).
+static UINT8 next_spawn_picked = 0;
+static UINT16 next_spawn_x;
+static UINT16 next_spawn_y;
 
 void SyncGameHud(void) {
     INIT_CONSOLE(font, 2);
@@ -166,26 +156,37 @@ void StartRoomEnemyWave(void) {
     enemies_killed = 0;
     spawn_timer = ENEMY_SPAWN_DELAY;
     enemy_spawn_index = 0;
-    spawn_warned = 0;
+    next_spawn_picked = 0;
+}
+
+// Start the warning animation on the portal at (x, y) for `frames` frames.
+// If that portal has no marker sprite (pool was full), the enemy still
+// spawns, just without a warning.
+static void WarnSpawnPortal(UINT16 x, UINT16 y, UINT8 frames) {
+    UINT8 i;
+    Sprite* spr;
+    SPRITEMANAGER_ITERATE(i, spr) {
+        if (spr->type == SpawnPoint && spr->x == x && spr->y == y) {
+            spr->custom_data[CD_SPAWN_WARNING] = frames;
+            return;
+        }
+    }
 }
 
 void SpawnEnemies() {
      if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
         --spawn_timer;
-        if (spawn_timer == SPAWN_WARN_FRAMES && !spawn_warned) {
-            /* One second out: pick the spawn point now and animate it. */
-            GetRandomSpawnPositionFromTable(&spawn_warn_x, &spawn_warn_y);
-            spawn_warned = 1;
-            WarnSpawnPoint(spawn_warn_x, spawn_warn_y);
+
+        // Pick the portal early so it can flash before the enemy appears.
+        if (!next_spawn_picked && spawn_timer <= SPAWN_WARNING_FRAMES) {
+            GetRandomSpawnPositionFromTable(&next_spawn_x, &next_spawn_y);
+            next_spawn_picked = 1;
+            WarnSpawnPortal(next_spawn_x, next_spawn_y, spawn_timer);
         }
+
         if (spawn_timer == 0) {
-            UINT16 x, y;
-            if (spawn_warned) {
-                x = spawn_warn_x;
-                y = spawn_warn_y;
-            } else {
-                GetRandomSpawnPositionFromTable(&x, &y);
-            }
+            UINT16 x = next_spawn_x;
+            UINT16 y = next_spawn_y;
 
             UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
 
@@ -196,6 +197,8 @@ void SpawnEnemies() {
                enemy that never existed and never clear. */
             if (!POOL_HAS_ROOM_LOW()) {
                 spawn_timer = SPAWN_RETRY_DELAY;
+                // Same portal keeps warning until the retry succeeds.
+                WarnSpawnPortal(x, y, SPAWN_RETRY_DELAY);
                 return;
             }
 
@@ -229,8 +232,8 @@ void SpawnEnemies() {
 
             enemies_left_to_spawn--;
             enemy_spawn_index++;
-            spawn_warned = 0;
             spawn_timer = ENEMY_SPAWN_DELAY; // reset timer
+            next_spawn_picked = 0;
         }
     }
 }
@@ -328,6 +331,7 @@ void CheckForPlayerDeath() {
         enemies_killed = 0;
         spawn_timer = ENEMY_SPAWN_DELAY;
         enemy_spawn_index = 0;
+        next_spawn_picked = 0;
         current_level = 1;
         current_room = DEBUG_START_ROOM;
         ready_coins = DEBUG_START_COINS;

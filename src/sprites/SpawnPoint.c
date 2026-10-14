@@ -4,15 +4,17 @@
 #include "SpriteData.h"
 
 #define ANIMATION_SPEED 8  // Frames between animation updates
+#define WARNING_ANIMATION_SPEED 2 // Faster spin while an enemy is about to come out
 #define TOTAL_FRAMES 4     // Frames 0 to 3
 
 void START() {
     // Set initial frame
     SetFrame(THIS, 0);
-    
+
     // Set animation timer
-    THIS->custom_data[0] = ANIMATION_SPEED;
-    
+    THIS->custom_data[CD_SPAWN_ANIM_TIMER] = ANIMATION_SPEED;
+    THIS->custom_data[CD_SPAWN_WARNING] = 0;
+
     // Spawn points should not have collision
     THIS->coll_w = 0;
     THIS->coll_h = 0;
@@ -22,23 +24,38 @@ void START() {
     THIS->lim_y = 255;
 }
 
+// "Enemy incoming" warning, started by StateGame's SpawnEnemies: flash white
+// every 4 frames using DMG palette 1 (set to solid white by SpritePlayer's
+// START). Returns the animation speed to use this frame.
+static UINT8 UpdateWarning(void) {
+    if (THIS->custom_data[CD_SPAWN_WARNING] == 0) {
+        return ANIMATION_SPEED;
+    }
+
+    THIS->custom_data[CD_SPAWN_WARNING]--;
+
+    if (THIS->custom_data[CD_SPAWN_WARNING] != 0 &&
+        (THIS->custom_data[CD_SPAWN_WARNING] & 4)) {
+        SPRITE_SET_DMG_PALETTE(THIS, 1);
+    } else {
+        // Always end on the normal palette, so the portal never stays white.
+        SPRITE_SET_DMG_PALETTE(THIS, 0);
+    }
+    return WARNING_ANIMATION_SPEED;
+}
+
 void UPDATE() {
-    /* Warning: an enemy appears here in custom_data[1] frames (StateGame.c).
-     * Spin 4x faster than normal and flash white, so the player can see
-     * which spawner is about to open. */
-    if (THIS->custom_data[1]) {
-        UINT8 w = --THIS->custom_data[1];
-        if ((w & 1) == 0) {
-            SetFrame(THIS, (THIS->anim_frame + 1) % TOTAL_FRAMES);
-        }
-        SPRITE_SET_DMG_PALETTE(THIS, w ? ((w >> 2) & 1) : 0);
-        return;
+    UINT8 speed = UpdateWarning();
+
+    // Clamp so switching to the fast speed takes effect right away.
+    if (THIS->custom_data[CD_SPAWN_ANIM_TIMER] > speed) {
+        THIS->custom_data[CD_SPAWN_ANIM_TIMER] = speed;
     }
 
     // Decrement animation timer
-    if (--THIS->custom_data[0] == 0) {
-        THIS->custom_data[0] = ANIMATION_SPEED;
-        
+    if (--THIS->custom_data[CD_SPAWN_ANIM_TIMER] == 0) {
+        THIS->custom_data[CD_SPAWN_ANIM_TIMER] = speed;
+
         // Cycle through frames 0 to 3
         UINT8 current_frame = THIS->anim_frame;
         UINT8 next_frame = (current_frame + 1) % TOTAL_FRAMES;

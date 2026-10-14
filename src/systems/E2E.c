@@ -310,7 +310,7 @@ static UINT16 E2E_DangerAt(UINT16 x, UINT16 y) {
 		if (spr->type == Bomb) d = (d > 16) ? (UINT16)(d - 16) : 0;
 		else if (spr->type == SpawnPoint) {
 			/* Flashing = an enemy appears there within a second: keep clear. */
-			UINT8 pad = spr->custom_data[1] ? 32 : 8;
+			UINT8 pad = spr->custom_data[CD_SPAWN_WARNING] ? 32 : 8;
 			d = (d > pad) ? (UINT16)(d - pad) : 0;
 		}
 		if (d < best) best = d;
