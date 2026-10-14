@@ -123,8 +123,8 @@ void UPDATE() {
         } else {
             dx = (INT8)THIS->custom_data[CD_DASH_DX];
             dy = (INT8)THIS->custom_data[CD_DASH_DY];
-            if (SafeTranslateSprite(THIS, dx, dy)) {
-                /* Hit a wall — cancel dash early */
+            if (EnemyTranslateSprite(THIS, dx, dy)) {
+                /* Hit a wall or closed door — cancel dash early */
                 THIS->custom_data[CD_CHARGE_STATE] = STATE_CHASE;
                 THIS->custom_data[CD_CHARGE_TIMER] = CHARGE_COOLDOWN;
             }

@@ -11,6 +11,7 @@
 #include "Scroll.h"
 #include "Math.h"
 #include "StateGame.h"
+#include "DoorCollision.h"
 #include "Palette.h"
 #include "Rooms.h"
 
@@ -89,24 +90,11 @@ static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
     return SafeTranslateSprite(sprite, x, y);
 }
 
-// Helper function to check for closed door collision
+// True if the player, moved by (dx, dy), would enter a closed door. Doors
+// block like the wall they plug (see DoorCollision.c), so the player can
+// slide along the wall past the door without snagging.
 UINT8 CollidesWithClosedDoor(Sprite* player, INT16 dx, INT16 dy) {
-    UINT8 i;
-    Sprite* spr;
-    SPRITEMANAGER_ITERATE(i, spr) {
-        if (IsDoorType(spr->type) && spr->custom_data[CD_DOOR_STATE] == 0) {
-            // Simulate next position
-            INT16 orig_x = player->x;
-            INT16 orig_y = player->y;
-            player->x += dx;
-            player->y += dy;
-            UINT8 collides = CheckCollision(player, spr);
-            player->x = orig_x;
-            player->y = orig_y;
-            if (collides) return 1;
-        }
-    }
-    return 0;
+    return SpriteBlockedByClosedDoor(player, (INT8)dx, (INT8)dy);
 }
 
 /**

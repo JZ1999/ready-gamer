@@ -1,6 +1,48 @@
 # Session notes (local — read first each session)
 
-Last updated: 2026-09-23. Branch: `feature/map5-spawn-locks`.
+Last updated: 2026-10-10. Branch: `feature/map5-spawn-locks`.
+
+## >>> RESUME HERE (2026-10-10) — committed + pushed, Release clean <<<
+
+**Where we stand:** all 10-09 + 10-10 work (door hitbox/alignment, doors block player AND enemies like wall tiles, map5 tile fix, spawn-portal warning animation) committed and pushed to `origin/feature/map5-spawn-locks`. All DEBUG values back to release (room 0, level 1, coins 0, `STARTING_LIVES`, damage 1/2). Release `bin/READY_GAMER.gb` rebuilt clean: MBC5 0x19, 128 KB, "READY GAMER", header+global checksums OK, SHA-256 `9068c0b6095ee9cc8c3b8fab2f3948befb2bbc6eab30fb8efc2f93a109af2ce8`. Permanent copy: `Game-Boy-releases/2026-10-10/` (+ SHA256SUMS, `test-scripts/spawn_warn.py`). PyBoy: boots to room 0 with HUD + sprites, portals flash before spawns. `bin/` has only Release (Debug not rebuilt; building one wipes the other).
+
+**Not verified by user in-game:** door sliding along walls (player + enemies), spawn warning feel. No PR to main, nothing flashed.
+
+**Next steps:** user playtests → tune `SPAWN_WARNING_FRAMES` (60) if needed → decide damage hurtbox option → PR `feature/map5-spawn-locks` → `main` → flash.
+
+**Open questions:** spawn warning readable enough or want new portal art? 1 s OK? Enemies visibly sinking into doors (same as walls) OK? Hurtbox option 1 vs 2? Projectiles blocked by doors? 5 s between waves OK? Cartridge/flasher?
+
+## >>> 2026-10-10: spawn warning animation (committed 2026-10-10, awaiting playtest) <<<
+
+`StateGame.c` `SpawnEnemies` now picks the spawn portal `SPAWN_WARNING_FRAMES` (60) early (`next_spawn_*`, reset on wave/room/death reset) and calls `WarnSpawnPortal` → sets `CD_SPAWN_WARNING` on that `SpawnPoint`. `SpawnPoint.c`: while warning, spins every 2 frames and flashes white every 4 frames via DMG palette 1 (OBP1 = solid white, set by `SpritePlayer` START); always ends on palette 0. Pool-full retry re-warns the same portal for 30 frames. No new art. PyBoy: map4 first spawn, portal flashes frames ~200-265, enemy appears at 272. 60 frames is a tuning number (user-owned).
+
+## >>> 2026-10-10: player-vs-door now uses wall rules (committed 2026-10-10, awaiting playtest) <<<
+
+User: player hugging a wall snagged on the door. Cause: walls test the player's box inset by `WALL_COLLISION_MARGIN` (3px), doors tested the drawn body (1px inset), so along the wall line the door stuck out 2px. Fix: `CollidesWithClosedDoor` (`SpritePlayer.c`) now tests the same inset wall box against the door's tile footprint (`BoxOverlapsClosedDoorTiles`, made public/BANKED in `DoorCollision.c/.h`). All doors sit in their wall column (`DOOR_ON_TILE_X`), so a closed door = wall tiles. Side effect: player visually overlaps the door up to 3px, same as walls. Follow-up same day: enemies also snagged on doors → `DoorCollision.c` simplified to one `SpriteBlockedByClosedDoor(sprite, dx, dy)` (wall box vs door tiles) used by player and `EnemyTranslateSprite`; removed drawn-body enemy check (`GetEnemyBody`, `BoxOverlapsClosedDoor`). Enemies now sink into doors visually like they do into walls (8x8 coll → 2x2 wall box). Not re-run through PyBoy/BFS: the tile-footprint check was already the part that sealed gaps in the 10-09 BFS. `DEBUG_START_COINS` set back to 0 (room still 3). `PLAYER_BODY_*` now unused (kept for hurtbox decision). Debug rebuilt clean, launched in Emulicious.
+
+## >>> RESUME HERE (2026-10-09) — doors + enemy door blocking, all UNCOMMITTED <<<
+
+**Where we stand:** working tree has uncommitted changes (nothing committed/pushed this session). Debug ROM builds clean and was last left open in Emulicious. Release ROM in `bin/` is STALE (built before the door-alignment change, and must not be rebuilt until the DEBUG values below are reverted).
+
+**Debug scaffolding ACTIVE (revert before commit/Release):** `src/states/StateGame.c` `DEBUG_START_ROOM 3` (boots map4 via menu START) and `DEBUG_START_COINS 100`.
+
+**Done this session:**
+1. **Door hitbox = drawn pixels.** door.gbr draws only x 5..12, full 16 tall. ZGB in this version has NO coll offset: `coll_w/coll_h` come from `.gbr.meta` `-pw/-ph`, `-px/-py` are ignored for collision. `CheckCollision` is also inclusive (+1px). Player now stops pixel-to-pixel. Constants `DOOR_HITBOX_*` and `PLAYER_BODY_*` (player drawn x1..14, y1..15) in `include/SpriteData.h`.
+2. **Enemies can't cross closed doors.** New `src/systems/DoorCollision.c` + `include/DoorCollision.h` (BANKED — bank 0 only ~250 B free). `EnemyTranslateSprite()` in `ZGBMain.c` (door check, then `SafeTranslateSprite`), used by `EnemyMoveWithWallAvoidance` and ChargeVirus dash. Player's `CollidesWithClosedDoor` uses the same shared `BoxOverlapsClosedDoor`. Projectiles still pass through doors (unchanged).
+   - Enemy `coll_w/h` is **8x8** (top-left quarter of the 16x16 drawing; ChargeVirus 16x16). With `WALL_COLLISION_MARGIN 3` their wall box is 2x2 px — they squeeze through gaps the player can't. So door check uses per-type drawn body (`GetEnemyBody`) **plus** door tile footprint vs wall box.
+   - `WALL_COLLISION_MARGIN` moved from `ZGBMain.c` to `include/StateGame.h`.
+3. **`res/map5.gbm` tile (12,14): 4 → 1 (wall).** 3-tile wall gap, D3 covers only 2 rows; SpeedVirus slipped through row 14. Backup of the original .gbm in `Game-Boy-releases/2026-10-09/test-scripts/map5.gbm.bak`.
+4. **Doors aligned flush with walls** via `DOOR_ON_TILE_X(col)` in `Rooms.c`: map4 P1 col 3, P2 col 9, P3 col 33; map5 D1 col 26, D2 col 39 (user's choice over col 38), D3 col 12. Rooms 0-2 (x=115 → col 15) already correct, untouched.
+
+**Verified:** pixel BFS (port of `CheckEdgeMapCollision`) for every room × every open/closed door combo × 5 enemy shapes: no enemy reaches door-gated area, player gating identical before/after moving doors, player still reaches all portals. PyBoy: enemy teleported behind room0 door stays at x≥128 (new ROM) vs crosses to x=91 (old FINAL ROM). Scripts: `E:\Users\Alejandro\Opal\Game-Boy-releases\2026-10-09\test-scripts\` (`gate_check.py`, `move_check.py`, `render_doors.py`, `enemy_door_test.py`, `gbm_tile.py` = .gbm tile patcher; headers are 20 bytes, records 3-byte big-endian).
+
+**Not verified in-game:** P3 + map5 doors after alignment (only rendered from map data); user hasn't playtested any of this session's changes yet.
+
+**Player damage hitbox — reviewed only, NOT changed (user asked "solo revisa"):** damage = `CheckCollision(player 16x16, enemy 8x8)` at `SpritePlayer.c:241`. Drawn-pixel gap when hit fires (+ = air, − = overlap): Basic/Tank below +1 / above −6 / right +1 / left −7; Speed +3/−2/+3/−5; Bomber 0/−7/+1/−7; Charge 0/+5/+1/+3. So from below it hits at/before touching; from above/left it's very forgiving. Proposed: (1) drawn-body check (reuse body boxes), or (2) same with a forgiveness inset (e.g. 2-3 px at the feet). User owns the numbers — waiting on choice; also whether to apply to bombs (`Bomb.c:35`) and boss run (`BasicVirus.c:97`).
+
+**Next steps:** user playtests map4/map5 doors → decide hurtbox option → revert DEBUG values → rebuild Release + verify header → commit (ask first) → PR to main.
+
+**Open questions:** P3 at col 33 and rooms 0-2 door height look OK in emulator? Hurtbox option 1 vs 2 (+ margins)? Projectiles blocked by doors too?
 
 ## >>> RESUME HERE (2026-09-23) — full record <<<
 
