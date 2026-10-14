@@ -37,6 +37,8 @@ _SPRITE_DMG(Boss, boss)\
 _SPRITE_DMG(BossBulletAimed, bomb)\
 _SPRITE_DMG(BossBulletDiagonal, bomb)\
 _SPRITE_DMG(BossSwordHitbox, slash)\
+_SPRITE_DMG(FireRateChip, electricity)\
+_SPRITE_DMG(RapidProjectile, screw)\
 SPRITE_DEF_END
 
 #include "ZGBMain_Init.h"

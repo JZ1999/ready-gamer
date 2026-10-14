@@ -53,4 +53,8 @@ typedef enum {
 #define IsEnemyType(type) ((type) == BasicVirus || (type) == SpeedVirus || (type) == TankVirus || (type) == BomberVirus || (type) == ChargeVirus)
 #define IsDoorType(type) ((type) == Door)
 
+// Ready Coins paid per kill: tougher enemies pay more (Tank has 5 HP, Charge
+// dashes) so the maze rooms' doors don't turn into a grind.
+#define KillCoinValue(type) (((type) == TankVirus || (type) == ChargeVirus) ? 2 : 1)
+
 #endif

@@ -8,7 +8,10 @@
 #define ENEMY_HIT_MUTE_FRAMES 8
 #define DOOR_OPEN_MUTE_FRAMES 10
 #define COIN_COLLECT_MUTE_FRAMES 6
-#define PLAYER_HIT_MUTE_FRAMES 10
+#define PLAYER_HIT_MUTE_FRAMES 14
+#define ENEMY_TYPE_HIT_MUTE_FRAMES 7
+#define CHARGE_DASH_MUTE_FRAMES 16
+#define BOMB_EXPLOSION_MUTE_FRAMES 40
 #define BOSS_MOVE_MUTE_FRAMES 3
 #define BOSS_SHOOT_MUTE_FRAMES 6
 #define BOSS_SWORD_MUTE_FRAMES 8
@@ -52,6 +55,14 @@ void PlayEnemyHitSound(void) BANKED;
 void PlayDoorOpenSound(void) BANKED;
 void PlayCoinCollectSound(void) BANKED;
 void PlayPlayerHitSound(void) BANKED;
+// One distinct hit sound per enemy type (BasicVirus, SpeedVirus, TankVirus,
+// BomberVirus, ChargeVirus); falls back to PlayEnemyHitSound for others.
+void PlayEnemyHitSoundFor(UINT8 sprite_type) BANKED;
+void PlayChargeDashSound(void) BANKED; // ChargeVirus: windup ends, dash starts
+void PlayBombExplosionSound(void) BANKED; // Bomb: detonation
+void PlayBombTickSound(void) BANKED;      // Bomb: last-second ticking
+void PlayFireChipSound(void) BANKED;      // fire-rate chip picked up
+void PlayRapidShotSound(void) BANKED;     // rapid-fire dart fired
 void PlayDoorOpeningMelody(void) BANKED;
 void UpdateDoorOpeningMelody(void) BANKED;
 void PlayEnemyHitMelody(void) BANKED;

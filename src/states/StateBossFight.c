@@ -8,6 +8,7 @@
 #include "BossFight.h"
 #include "SoundEffects.h"
 #include "SoftReset.h"
+#include "E2E.h"
 
 /*
  * Static single-screen arena after the boss-run corridor (StateBossRun hands
@@ -71,6 +72,10 @@ void UPDATE() {
     if (boss_count == 0) {
         SetState(StateWin);
     }
+
+#if E2E_ENABLED
+    E2E_OnBossFightUpdate();
+#endif
 }
 
 void DESTROY() {

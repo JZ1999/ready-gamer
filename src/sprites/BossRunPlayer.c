@@ -2,6 +2,7 @@
 
 #include "ZGBMain.h"
 #include "Keys.h"
+#include "E2E.h"
 #include "SpriteManager.h"
 #include "SpriteData.h"
 #include "SpriteBudget.h"
@@ -187,6 +188,7 @@ void START() {
 }
 
 void UPDATE() {
+    E2E_INJECT_KEYS();
     UINT8 moved = 0;
     UINT8 invuln_before = THIS->custom_data[CD_INVINCIBILITY];
     UINT8 can_phase_walls = invuln_before > 0;

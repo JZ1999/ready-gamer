@@ -18,6 +18,7 @@ void EnsureRoomSpawnPoints(void);
 void ApplyDoorSpawnUnlocks(UINT16 door_x, UINT16 door_y);
 
 void GetRandomSpawnPositionFromTable(UINT16* x, UINT16* y);
+UINT8 GetRoomSpawnPointAny(UINT8 i, UINT16* x, UINT16* y) BANKED;
 void EnsureRoomSpawnPointsFromTable(void);
 void ApplyDoorSpawnUnlocksFromTable(UINT16 door_x, UINT16 door_y);
 

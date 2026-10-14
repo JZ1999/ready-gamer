@@ -1,5 +1,6 @@
 #include "Banks/SetAutoBank.h"
 #include "SoundEffects.h"
+#include "ZGBMain.h"
 
 // Door opening melody state
 static UINT8 door_melody_timer = 0;
@@ -127,12 +128,55 @@ void PlayDoorOpenSound(void) BANKED {
  * Uses Channel 4 (noise) for a distinctive coin sound
  */
 void PlayCoinCollectSound(void) BANKED {
-    // Channel 4: Noise channel for a distinctive coin sound
-    PlayFx(CHANNEL_4, COIN_COLLECT_MUTE_FRAMES,
-           0x00,   // NR41: Length
-           0x00,   // NR42: Volume envelope
-           0x00,   // NR43: Frequency and randomness
-           0x80);  // NR44: Restart sound
+    /* Bright "bling" on the wave channel (the triangle InitWaveRam loads),
+     * cut off by the hardware length counter after ~125 ms. Used to write
+     * volume 0 to NR42 and was silent. On channel 3 so it never cuts off the
+     * enemy hit sound that plays on the same kill (channels 1/2/4). */
+    PlayFx(CHANNEL_3, COIN_COLLECT_MUTE_FRAMES,
+           0x80,   // NR30: wave channel on
+           0xE0,   // NR31: length = (256-224)/256 s = 125 ms
+           0x20,   // NR32: 100% volume
+           0xC0,   // NR33: freq low  (x = 0x7C0 ~ 1 kHz)
+           0xC7);  // NR34: restart + length enable + freq high
+}
+
+/* Bomb detonation: loud, long, low noise rumble. */
+void PlayBombExplosionSound(void) BANKED {
+    PlayFx(CHANNEL_4, BOMB_EXPLOSION_MUTE_FRAMES,
+           0x00,   // NR41: length
+           0xF5,   // NR42: volume 15, envelope down, step 5 (~1.2 s tail)
+           0x71,   // NR43: low, 15-bit noise
+           0x80);  // NR44: restart
+}
+
+/* Fire-rate chip picked up: bright rising "power-up" chirp (long upward sweep). */
+void PlayFireChipSound(void) BANKED {
+    PlayFx(CHANNEL_1, 20,
+           0x27,   // NR10: sweep time 2, increase, shift 7 (slow climb)
+           0x80,   // NR11: 50% duty
+           0xF2,   // NR12: volume 15, envelope down, step 2
+           0x00,   // NR13: freq low  (x = 0x600 ~ 256 Hz start)
+           0x86);  // NR14: freq high, restart
+}
+
+/* Rapid-fire dart: short, high, thin "pip" (quieter than the screw shot so
+ * 2.5x the shots doesn't get tiring). */
+void PlayRapidShotSound(void) BANKED {
+    PlayFx(CHANNEL_1, 3,
+           0x00,   // NR10: no sweep
+           0x40,   // NR11: 25% duty
+           0x71,   // NR12: volume 7, fast fade
+           0xA0,   // NR13: freq low  (x = 0x7A0 ~ 1.4 kHz)
+           0x87);  // NR14: freq high, restart
+}
+
+/* Bomb about to blow: short dry tick (call every ~15 frames in its last second). */
+void PlayBombTickSound(void) BANKED {
+    PlayFx(CHANNEL_4, 2,
+           0x00,   // NR41
+           0x61,   // NR42: volume 6, fast fade
+           0x18,   // NR43: high, 7-bit noise (click)
+           0x80);  // NR44
 }
 
 /**
@@ -141,11 +185,61 @@ void PlayCoinCollectSound(void) BANKED {
  * sound so a player hit reads as distinct from landing a hit on an enemy.
  */
 void PlayPlayerHitSound(void) BANKED {
-    PlayFx(CHANNEL_2, PLAYER_HIT_MUTE_FRAMES,
-           0x00,   // NR21: 50% duty, length
-           0x84,   // NR22: Volume 8, envelope down, step 4 (longer fade)
-           0x10,   // NR23: Frequency low (low pitch)
-           0x87);  // NR24: Frequency high, restart sound
+    /* "Ouch": loud 75%-duty square that sweeps sharply DOWN from ~410 Hz.
+     * The only falling, harsh-duty sound in the room game, so getting hurt
+     * never sounds like landing a hit. */
+    PlayFx(CHANNEL_1, PLAYER_HIT_MUTE_FRAMES,
+           0x2B,   // NR10: sweep time 2, decrease (bit 3), shift 3 (fast fall)
+           0xC0,   // NR11: 75% duty
+           0xF3,   // NR12: volume 15, envelope down, step 3
+           0xC0,   // NR13: freq low  (x = 0x6C0 ~ 410 Hz)
+           0x86);  // NR14: freq high, restart
+}
+
+/*
+ * Per-enemy hit sounds. Each enemy gets its own channel/timbre so a player
+ * can tell what they hit without looking:
+ *   BasicVirus  - plain 50% square "boop", gentle downward sweep (ch1)
+ *   SpeedVirus  - thin 12.5% square "zip" that sweeps UP (ch1)
+ *   TankVirus   - low, long noise "thunk" (ch4, long-period noise)
+ *   BomberVirus - short metallic crackle (ch4, 7-bit noise)
+ *   ChargeVirus - bright 75% square "clang" (ch2)
+ */
+void PlayEnemyHitSoundFor(UINT8 sprite_type) BANKED {
+    switch (sprite_type) {
+        case BasicVirus:
+            PlayFx(CHANNEL_1, ENEMY_TYPE_HIT_MUTE_FRAMES,
+                   0x1A, 0x80, 0xA2, 0xC0, 0x86); // sweep down, 50%, ~410 Hz
+            break;
+        case SpeedVirus:
+            PlayFx(CHANNEL_1, ENEMY_TYPE_HIT_MUTE_FRAMES,
+                   0x16, 0x00, 0x91, 0x80, 0x86); // sweep UP (shift 6 so it lasts ~110 ms before overflow), 12.5%, from ~341 Hz
+            break;
+        case TankVirus:
+            PlayFx(CHANNEL_4, ENEMY_TYPE_HIT_MUTE_FRAMES + 3,
+                   0x00, 0xC3, 0x71, 0x80);       // vol 12 slow fade, low noise
+            break;
+        case BomberVirus:
+            PlayFx(CHANNEL_4, ENEMY_TYPE_HIT_MUTE_FRAMES,
+                   0x00, 0xA1, 0x3B, 0x80);       // vol 10 fast fade, 7-bit metallic
+            break;
+        case ChargeVirus:
+            PlayFx(CHANNEL_2, ENEMY_TYPE_HIT_MUTE_FRAMES,
+                   0xC0, 0xB3, 0x83, 0x87);       // 75% duty, ~1050 Hz
+            break;
+        default:
+            PlayEnemyHitSound();
+            break;
+    }
+}
+
+/* ChargeVirus dash: rising hiss ("whoosh") - noise whose volume swells UP. */
+void PlayChargeDashSound(void) BANKED {
+    PlayFx(CHANNEL_4, CHARGE_DASH_MUTE_FRAMES,
+           0x00,   // NR41: length
+           0x3D,   // NR42: volume 3, envelope UP, step 5 (swell)
+           0x24,   // NR43: mid-pitch 15-bit noise (airy)
+           0x80);  // NR44: restart
 }
 
 /**

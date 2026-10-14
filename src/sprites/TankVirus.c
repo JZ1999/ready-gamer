@@ -4,6 +4,7 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
+#include "FlowField.h"
 
 #define CD_FRAME_TIMER 1
 // Cycles 0,1,2 across chase ticks; slot 4 is free (health/frame/blink/move
@@ -55,6 +56,8 @@ void UPDATE() {
         if(scroll_target->y > THIS->y + 1) dy = 1;
         else if(scroll_target->y < THIS->y - 1) dy = -1;
     }
+
+    EnemySteer(THIS, &dx, &dy); /* follow corridors (FlowField.c) */
 
     UINT8 frame = THIS->anim_frame;
 

@@ -278,3 +278,12 @@ DebugColor/
 
 # Local session entry point (per-user, never pushed)
 INIT.md
+
+# e2e run output
+tools/e2e/artifacts/
+
+# Linux e2e runner: ZGB engine unpacked from ZGB.zip
+ZGB_linux/
+tools/e2e/linux/rgrun
+# Linux e2e runner: built asset converters
+tools/e2e/linux/bin/

@@ -2,6 +2,7 @@
 
 #include "ZGBMain.h"
 #include "Keys.h"
+#include "E2E.h"
 #include "SpriteManager.h"
 #include "SpriteData.h"
 #include "SpriteBudget.h"
@@ -110,6 +111,7 @@ void START() {
 }
 
 void UPDATE() {
+    E2E_INJECT_KEYS();
     UINT8 moved = 0;
 
     if(boss_fight_shoot_cooldown > 0) boss_fight_shoot_cooldown--;

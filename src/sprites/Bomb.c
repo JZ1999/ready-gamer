@@ -4,6 +4,7 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
+#include "SoundEffects.h"
 
 #define CD_BOMB_FUSE       0   // Countdown frames until explosion
 #define CD_EXPLODE_TIMER   1   // Frames until next explosion frame (0 = still fusing)
@@ -12,6 +13,7 @@
 #define BOMB_FRAME_IDLE         0    // GBTD frame 1 (bomb) — export tiles 1-4 as frames 0-3
 #define BOMB_FRAME_EXPLODE_LAST 3    // GBTD frames 2-4 (explosion burst then empty)
 #define EXPLODE_FRAME_DELAY     10    // ~5 frames per step for a quick burst
+#define BOMB_WARN_FRAMES        60    // last second: flash fast + tick
 
 extern Sprite* scroll_target;
 
@@ -28,10 +30,20 @@ void START() {
 void UPDATE() {
     if (THIS->custom_data[CD_EXPLODE_TIMER] == 0) {
         if (THIS->custom_data[CD_BOMB_FUSE] > 0) {
-            THIS->custom_data[CD_BOMB_FUSE]--;
+            UINT8 fuse = --THIS->custom_data[CD_BOMB_FUSE];
+            /* Telegraph: slow blink with 2 s left, then a fast white
+             * flash + ticking in the last second so the blast is readable. */
+            if (fuse < BOMB_WARN_FRAMES) {
+                SPRITE_SET_DMG_PALETTE(THIS, ((fuse >> 2) & 1) ? 1 : 0);
+                if ((fuse % 15) == 0) PlayBombTickSound();
+            } else if (fuse < BOMB_WARN_FRAMES * 2) {
+                SPRITE_SET_DMG_PALETTE(THIS, ((fuse >> 4) & 1) ? 1 : 0); /* 2 s left: slow blink */
+            }
             return;
         }
 
+        SPRITE_SET_DMG_PALETTE(THIS, 0);
+        PlayBombExplosionSound();
         if (scroll_target && CheckCollision(THIS, scroll_target)) {
             TakeDamage(scroll_target);
         }

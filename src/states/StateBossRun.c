@@ -10,6 +10,7 @@
 #include "BossRun.h"
 #include "SoundEffects.h"
 #include "SoftReset.h"
+#include "E2E.h"
 #include <rand.h>
 
 /*
@@ -118,6 +119,10 @@ void UPDATE() {
             SafeSpriteAddLow(BasicVirus, tile_col * 8, tile_row * 8); /* NULL if pool near-full: skip, next interval retries */
         }
     }
+
+#if E2E_ENABLED
+    E2E_OnBossUpdate();
+#endif
 }
 
 void DESTROY() {

@@ -15,9 +15,12 @@
 #include "StateGame.h"
 #include "SoftReset.h"
 #include "SpriteBudget.h"
+#include "E2E.h"
+#include "FlowField.h"
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
+#define SPAWN_WARN_FRAMES 60   // spawner animates this long before an enemy appears
 #define SPAWN_RETRY_DELAY 30    // frames to wait before retrying a spawn when the sprite pool is full
 
 // DEBUG: start directly in this room index for testing — set back to 0 for normal start
@@ -72,6 +75,8 @@ UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
 UINT8 pending_room_transition = 0;
 UINT8 pending_electric_pickup = 0;
+UINT8 pending_firechip_pickup = 0; /* FireRateChip.c -> granted in UPDATE */
+UINT8 player_rapid_fire = 0;       /* fire-rate chip owned (SpritePlayer.c) */
 
 UINT16 ready_coins = 0; // Player's currency
 UINT8 player_lives = DEBUG_STARTING_LIVES;
@@ -118,11 +123,28 @@ const UINT8 level_lengths[MAX_LEVELS] = {
     6, 7, 7, 8, 9
 };
 UINT8 enemy_spawn_index = 0;
+extern UINT8 player_hp; /* SpritePlayer.c, for the HUD */
+
+/* Next spawn position, picked SPAWN_WARN_FRAMES early so its spawner can
+ * play a warning animation before the enemy appears. */
+static UINT8 spawn_warned = 0;
+static UINT16 spawn_warn_x;
+static UINT16 spawn_warn_y;
+
+static void WarnSpawnPoint(UINT16 x, UINT16 y) {
+    UINT8 i;
+    Sprite* spr;
+    SPRITEMANAGER_ITERATE(i, spr) {
+        if (spr->type == SpawnPoint && spr->x == x && spr->y == y) {
+            spr->custom_data[1] = SPAWN_WARN_FRAMES; /* SpawnPoint.c: warning animation */
+        }
+    }
+}
 
 void SyncGameHud(void) {
     INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 1);
-    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
+    DPrintf("Coins:%d Lives:%d HP%d ", ready_coins, player_lives, player_hp);
 }
 
 static void ClampLevel(void) {
@@ -144,13 +166,26 @@ void StartRoomEnemyWave(void) {
     enemies_killed = 0;
     spawn_timer = ENEMY_SPAWN_DELAY;
     enemy_spawn_index = 0;
+    spawn_warned = 0;
 }
 
 void SpawnEnemies() {
      if (enemies_left_to_spawn > 0 && enemy_spawn_index < enemies_to_spawn) {
-        if (--spawn_timer == 0) {
+        --spawn_timer;
+        if (spawn_timer == SPAWN_WARN_FRAMES && !spawn_warned) {
+            /* One second out: pick the spawn point now and animate it. */
+            GetRandomSpawnPositionFromTable(&spawn_warn_x, &spawn_warn_y);
+            spawn_warned = 1;
+            WarnSpawnPoint(spawn_warn_x, spawn_warn_y);
+        }
+        if (spawn_timer == 0) {
             UINT16 x, y;
-            GetRandomSpawnPositionFromTable(&x, &y);
+            if (spawn_warned) {
+                x = spawn_warn_x;
+                y = spawn_warn_y;
+            } else {
+                GetRandomSpawnPositionFromTable(&x, &y);
+            }
 
             UINT8 type = level_spawns[current_level - 1][enemy_spawn_index]; // current_level is 1-based
 
@@ -194,6 +229,7 @@ void SpawnEnemies() {
 
             enemies_left_to_spawn--;
             enemy_spawn_index++;
+            spawn_warned = 0;
             spawn_timer = ENEMY_SPAWN_DELAY; // reset timer
         }
     }
@@ -242,6 +278,8 @@ void START() {
     ready_coins = DEBUG_START_COINS;
     player_lives = DEBUG_STARTING_LIVES;
     player_electric_attack = DEBUG_START_ELECTRIC;
+    player_rapid_fire = 0;
+    pending_firechip_pickup = 0;
     pending_room_transition = 0;
     pending_electric_pickup = 0;
 
@@ -294,6 +332,7 @@ void CheckForPlayerDeath() {
         current_room = DEBUG_START_ROOM;
         ready_coins = DEBUG_START_COINS;
         player_electric_attack = 0;
+        player_rapid_fire = 0;
 
         // Clear the screen and show restart message
         DPRINT_POS(0, 0);
@@ -369,6 +408,12 @@ void UPDATE() {
         return;
     }
 
+    if (pending_firechip_pickup) {
+        pending_firechip_pickup = 0;
+        player_rapid_fire = 1;
+        PlayFireChipSound();
+    }
+
     if (pending_electric_pickup) {
         pending_electric_pickup = 0;
         player_electric_attack = 1;
@@ -379,11 +424,16 @@ void UPDATE() {
     }
 
     DPRINT_POS(0, 1);
-    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
+    DPrintf("Coins:%d Lives:%d HP%d ", ready_coins, player_lives, player_hp);
 
+    FlowFieldUpdate();
     SpawnEnemies();
     
     CheckForNextLevel();
     UpdateDoorOpeningMelody();
     UpdateEnemyHitMelody();
+
+#if E2E_ENABLED
+    E2E_OnGameUpdate();
+#endif
 }

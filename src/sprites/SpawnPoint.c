@@ -23,6 +23,18 @@ void START() {
 }
 
 void UPDATE() {
+    /* Warning: an enemy appears here in custom_data[1] frames (StateGame.c).
+     * Spin 4x faster than normal and flash white, so the player can see
+     * which spawner is about to open. */
+    if (THIS->custom_data[1]) {
+        UINT8 w = --THIS->custom_data[1];
+        if ((w & 1) == 0) {
+            SetFrame(THIS, (THIS->anim_frame + 1) % TOTAL_FRAMES);
+        }
+        SPRITE_SET_DMG_PALETTE(THIS, w ? ((w >> 2) & 1) : 0);
+        return;
+    }
+
     // Decrement animation timer
     if (--THIS->custom_data[0] == 0) {
         THIS->custom_data[0] = ANIMATION_SPEED;

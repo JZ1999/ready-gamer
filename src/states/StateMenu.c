@@ -5,6 +5,7 @@
 #include "SpriteManager.h"
 #include "Music.h"
 #include "main.h"
+#include "E2E.h"
 
 #include <gb/gb.h>
 #include "SoundEffects.h"
@@ -54,6 +55,10 @@ void START() {
  * Handles input for menu navigation and state transitions
  */
 void UPDATE() {
+#if E2E_ENABLED
+    E2E_OnMenuUpdate();
+    E2E_INJECT_KEYS();
+#endif
     // Check for START button press to begin the game
     if (KEY_TICKED(J_START) || KEY_TICKED(J_A)) {
         PlayMusic(readygames, 0);

@@ -8,6 +8,7 @@
 #include "Music.h"
 #include "SpriteManager.h"
 #include "Print.h"
+#include "E2E.h"
 
 IMPORT_MAP(GameOvermap);
 IMPORT_TILES(MenuTileset);
@@ -42,9 +43,16 @@ void START() {
 	HIDE_SPRITES;
 
 	PlayMusic(menu, 0);
+
+#if E2E_ENABLED
+	E2E_OnWinStart();
+#endif
 }
 
 void UPDATE() {
+#if E2E_ENABLED
+	E2E_OnWinUpdate();
+#endif
 	if(KEY_TICKED(J_START) || KEY_TICKED(J_A) || KEY_TICKED(J_B)) {
 		SetState(StateMenu);
 	}

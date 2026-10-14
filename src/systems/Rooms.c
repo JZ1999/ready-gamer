@@ -445,6 +445,33 @@ static void SpawnCoinPickups(const RoomDef* room) {
     }
 }
 
+/*
+ * Fire-rate chip placement, one per room at most (kept out of RoomDef so the
+ * room table rows stay unchanged). map3 (room 2): open floor in the top
+ * middle, reachable from the start with the door closed, >= 48 px from every
+ * spawn point and off the coin pickup's row.
+ */
+typedef struct {
+    UINT8 room;
+    UINT16 x;
+    UINT16 y;
+} RoomPickupPlacement;
+
+static const RoomPickupPlacement firechip_pickups[] = {
+    { 3, 21 * 8, 4 * 8 }, /* map4: middle of the zigzag maze behind door P1 */
+};
+
+static void SpawnFireChipPickups(void) {
+    UINT8 i;
+    for (i = 0; i != ARRAY_LEN(firechip_pickups); ++i) {
+        if (firechip_pickups[i].room == current_room) {
+            SpriteManagerAdd(FireRateChip, firechip_pickups[i].x, firechip_pickups[i].y);
+        }
+    }
+}
+
+extern UINT8 player_rapid_fire;
+
 static void SetupRoomEntities(const RoomDef* room) {
     /* Portal spawned before spawn points: GB hardware drops sprites past the
        10-per-scanline cap by OAM order (lowest index wins), and OAM order
@@ -455,6 +482,7 @@ static void SetupRoomEntities(const RoomDef* room) {
     SyncSpawnMarkers(room);
     SpawnElectricityPickups(room);
     SpawnCoinPickups(room);
+    if (!player_rapid_fire) SpawnFireChipPickups(); /* already have it: don't respawn */
 }
 
 static UINT8 IsSpawnIndexLocked(UINT8 index) {
@@ -462,6 +490,17 @@ static UINT8 IsSpawnIndexLocked(UINT8 index) {
         return 0; /* out of tracked range — treat as unlocked rather than unusable */
     }
     return spawn_locked[index];
+}
+
+/* Any spawn point of the current room, locked or not (FlowField.c uses it
+ * as a fallback when no UNLOCKED spawner can reach the player). Returns 0
+ * past the last index. */
+UINT8 GetRoomSpawnPointAny(UINT8 i, UINT16* x, UINT16* y) BANKED {
+    const RoomDef* room = GetCurrentRoom();
+    if (i >= room->spawn_point_count) return 0;
+    *x = room->spawn_points[i].x;
+    *y = room->spawn_points[i].y;
+    return 1;
 }
 
 void GetRandomSpawnPosition(UINT16* x, UINT16* y) {

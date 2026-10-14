@@ -31,7 +31,7 @@ void KillVirus(Sprite* virus, UINT8 virus_id) {
     }
 
     ++enemies_killed;
-    ++ready_coins; // Each enemy gives 1 Ready Coin
+    ready_coins += KillCoinValue(virus->type); // 1 coin, 2 for Tank/Charge
     PlayCoinCollectSound(); // Play coin collection sound
     SpriteManagerRemove(virus_id);
 }
@@ -101,14 +101,15 @@ void UPDATE() {
     SPRITEMANAGER_ITERATE(i, spr) {
 		if (IsEnemyType(spr->type)) {
 			if (CheckCollision(THIS, spr)) {
+                UINT8 hit_type = spr->type;
                 if(spr->custom_data[CD_ENEMY_HEALTH] > PROJECTILE_DAMAGE_NORMAL) {
                     spr->custom_data[CD_ENEMY_HEALTH] -= PROJECTILE_DAMAGE_NORMAL;
                     spr->custom_data[CD_BLINK_TIMER] = 10; // Set hit feedback timer (higher value for more visible effect)
-                    PlayEnemyHitSound(); // Play hit sound
+                    PlayEnemyHitSoundFor(hit_type); // each enemy type has its own hit sound
                 } else {
                     UINT8 virus_id = i;
                     KillVirus(spr, virus_id);
-                    PlayEnemyHitSound(); // Play hit sound
+                    PlayEnemyHitSoundFor(hit_type);
                 }
                 SpriteManagerRemove(THIS_IDX); // Remove bullet
                 return;

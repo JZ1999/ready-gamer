@@ -5,6 +5,7 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
+#include "FlowField.h"
 #include "BossRun.h"
 #include <rand.h>
 
@@ -134,6 +135,7 @@ void UPDATE() {
             if(target->y > THIS->y + 1) dy = 1;
             else if(target->y < THIS->y - 1) dy = -1;
         }
+        if (!boss_run_player) EnemySteer(THIS, &dx, &dy); /* follow corridors (FlowField.c) */
     }
 
     UINT8 frame = THIS->anim_frame;

@@ -10,7 +10,8 @@
 
 #define FRAME_DELAY 10
 #define TOTAL_FRAMES 3
-#define ELECTRIC_FRAME_FIRST 6
+#define ELECTRIC_FRAME_FIRST 6    // vertical bolt frames 6-8
+#define ELECTRIC_FRAME_H_FIRST 9  // horizontal bolt frames 9-11 (6-8 rotated)
 #define PROJECTILE_LIFETIME 120
 
 extern UINT8 enemies_killed;
@@ -22,26 +23,32 @@ static void KillVirus(Sprite* virus, UINT8 virus_id) {
     }
 
     ++enemies_killed;
-    ++ready_coins;
+    ready_coins += KillCoinValue(virus->type); // 1 coin, 2 for Tank/Charge
     PlayCoinCollectSound();
     SpriteManagerRemove(virus_id);
 }
 
 static void DamageEnemy(Sprite* enemy, UINT8 virus_id) {
     UINT8 damage = PROJECTILE_DAMAGE_ELECTRIC;
+    UINT8 hit_type = enemy->type;
 
     if (enemy->custom_data[CD_ENEMY_HEALTH] > damage) {
         enemy->custom_data[CD_ENEMY_HEALTH] -= damage;
         enemy->custom_data[CD_BLINK_TIMER] = 10;
-        PlayEnemyHitSound();
+        PlayEnemyHitSoundFor(hit_type);
     } else {
         KillVirus(enemy, virus_id);
-        PlayEnemyHitSound();
+        PlayEnemyHitSoundFor(hit_type);
     }
 }
 
 void START() {
-    SetFrame(THIS, ELECTRIC_FRAME_FIRST);
+    /* Left/right shots use the rotated (horizontal) bolt frames; the frame
+     * base is kept in CD_ANIM_OFFSET for the animation below. */
+    THIS->custom_data[CD_ANIM_OFFSET] =
+        (THIS->custom_data[CD_DIR] == DIR_LEFT || THIS->custom_data[CD_DIR] == DIR_RIGHT)
+            ? ELECTRIC_FRAME_H_FIRST : ELECTRIC_FRAME_FIRST;
+    SetFrame(THIS, THIS->custom_data[CD_ANIM_OFFSET]);
     THIS->custom_data[CD_ANIM_TIMER] = FRAME_DELAY;
     THIS->custom_data[CD_LIFETIME] = PROJECTILE_LIFETIME;
 
@@ -94,8 +101,8 @@ void UPDATE() {
         UINT8 relative_frame;
 
         THIS->custom_data[CD_ANIM_TIMER] = FRAME_DELAY;
-        relative_frame = (THIS->anim_frame - ELECTRIC_FRAME_FIRST + 1) % TOTAL_FRAMES;
-        SetFrame(THIS, ELECTRIC_FRAME_FIRST + relative_frame);
+        relative_frame = (THIS->anim_frame - THIS->custom_data[CD_ANIM_OFFSET] + 1) % TOTAL_FRAMES;
+        SetFrame(THIS, THIS->custom_data[CD_ANIM_OFFSET] + relative_frame);
     }
 
     if (--THIS->custom_data[CD_LIFETIME] == 0) {

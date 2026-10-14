@@ -8,6 +8,7 @@
 #include "main.h"
 #include <gb/gb.h>
 #include <string.h>
+#include "StateGame.h"
 
 IMPORT_MAP(map);
 IMPORT_MAP(map2);
@@ -269,7 +270,7 @@ UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {
 	UINT16 target_y;
 
 	enemy_y = enemy->y;
-	result = SafeTranslateSprite(enemy, (INT8)dx, (INT8)dy);
+	result = EnemyTranslateSprite(enemy, (INT8)dx, (INT8)dy);
 
 	if (result != 0 && scroll_target) {
 		target_y = scroll_target->y;
@@ -282,11 +283,11 @@ UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy) {
 			avoid_dy = -1;
 		}
 
-		result = SafeTranslateSprite(enemy, 0, (INT8)avoid_dy);
+		result = EnemyTranslateSprite(enemy, 0, (INT8)avoid_dy);
 
 		if (result != 0) {
 			avoid_dy = (avoid_dy == -1) ? 1 : -1;
-			result = SafeTranslateSprite(enemy, 0, (INT8)avoid_dy);
+			result = EnemyTranslateSprite(enemy, 0, (INT8)avoid_dy);
 		}
 	}
 

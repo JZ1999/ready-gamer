@@ -8,6 +8,7 @@ extern UINT8 pending_electric_pickup;
 void StartRoomEnemyWave(void);
 void SyncGameHud(void);
 UINT8 SafeTranslateSprite(Sprite* sprite, INT8 x, INT8 y);
+UINT8 EnemyTranslateSprite(Sprite* enemy, INT8 dx, INT8 dy) BANKED; /* + closed doors block (systems/EnemyMove.c) */
 UINT8 EnemyMoveWithWallAvoidance(Sprite* enemy, INT16 dx, INT16 dy);
 
 #endif
