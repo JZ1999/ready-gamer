@@ -61,8 +61,6 @@ void PlayEnemyHitSoundFor(UINT8 sprite_type) BANKED;
 void PlayChargeDashSound(void) BANKED; // ChargeVirus: windup ends, dash starts
 void PlayBombExplosionSound(void) BANKED; // Bomb: detonation
 void PlayBombTickSound(void) BANKED;      // Bomb: last-second ticking
-void PlayFireChipSound(void) BANKED;      // fire-rate chip picked up
-void PlayRapidShotSound(void) BANKED;     // rapid-fire dart fired
 void PlayDoorOpeningMelody(void) BANKED;
 void UpdateDoorOpeningMelody(void) BANKED;
 void PlayEnemyHitMelody(void) BANKED;

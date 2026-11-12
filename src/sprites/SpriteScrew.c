@@ -31,7 +31,7 @@ void KillVirus(Sprite* virus, UINT8 virus_id) {
     }
 
     ++enemies_killed;
-    ready_coins += KillCoinValue(virus->type); // 1 coin, 2 for Tank/Charge
+    ++ready_coins; // Each enemy gives 1 Ready Coin
     PlayCoinCollectSound(); // Play coin collection sound
     SpriteManagerRemove(virus_id);
 }

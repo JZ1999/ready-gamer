@@ -13,6 +13,7 @@
 #include "Math.h"
 #include "StateGame.h"
 #include "DoorCollision.h"
+#include "Hurtbox.h"
 #include "Palette.h"
 #include "Rooms.h"
 
@@ -21,12 +22,9 @@ Direction player_direction;
 extern UINT16 ready_coins;
 extern UINT8 player_lives;
 UINT8 player_electric_attack = 0;
-extern UINT8 player_rapid_fire; /* StateGame.c */
-UINT8 player_hp = 2; /* mirrored for the HUD (= PLAYER_MAX_HEALTH) */
 
 #define SHOOT_COOLDOWN       100
-#define RAPID_SHOOT_COOLDOWN 40   // with the fire-rate chip (2.5x the fire rate)
-#define PLAYER_MAX_HEALTH    2   // 2 hits per life; the 2nd hit costs the life
+#define PLAYER_MAX_HEALTH    1
 #define INVINCIBILITY_FRAMES 60
 #define RESPAWN_INVINCIBILITY_FRAMES 180 // ~3 seconds at 60fps, longer than a normal hit's i-frames
 #define WALK_ANIM_SPEED      8
@@ -217,7 +215,6 @@ void START() {
 
 void UPDATE() {
     E2E_INJECT_KEYS();
-    player_hp = THIS->custom_data[CD_PLAYER_HEALTH];
     if(shoot_cooldown > 0) shoot_cooldown--;
     if(THIS->custom_data[CD_INVINCIBILITY] > 0) THIS->custom_data[CD_INVINCIBILITY]--;
 
@@ -240,14 +237,12 @@ void UPDATE() {
         door_interaction_handled = HandleDoorInteraction(adjacent_door);
     }
     
-    // Handle direct collisions with enemies
+    // Handle direct collisions with enemies: drawn bodies, not ZGB coll
+    // boxes (those hit a few px below/right of the art, see Hurtbox.c).
     SPRITEMANAGER_ITERATE(i, spr) {
-        if (CheckCollision(THIS, spr)) {
-            // Handle enemy collisions
-            if (IsEnemyType(spr->type)) {
-                TakeDamage(THIS);
-                break; // Only damage once per frame
-            }
+        if (IsEnemyType(spr->type) && PlayerTouchesEnemy(THIS, spr)) {
+            TakeDamage(THIS);
+            break; // Only damage once per frame
         }
     }
 
@@ -286,19 +281,15 @@ void UPDATE() {
     }
 
 	if(KEY_PRESSED(J_B) && shoot_cooldown == 0) {
-        /* Electric shots win when you have both (they hit harder); the chip
-         * then only speeds them up. Otherwise the chip fires plasma darts. */
-        UINT8 projectile_type = THIS->custom_data[CD_PLAYER_ELECTRIC] ? ElectricProjectile
-                              : (player_rapid_fire ? RapidProjectile : SpriteScrew);
+        UINT8 projectile_type = THIS->custom_data[CD_PLAYER_ELECTRIC] ? ElectricProjectile : SpriteScrew;
         Sprite* projectile = SafeSpriteAddEx(projectile_type, THIS->x, THIS->y, (UINT8)player_direction);
 
         /* NULL = pool full: skip the shot and keep the cooldown clear so the
            player can retry next frame. */
         if (projectile) {
             projectile->custom_data[CD_DIR] = (UINT8)player_direction;
-            shoot_cooldown = player_rapid_fire ? RAPID_SHOOT_COOLDOWN : SHOOT_COOLDOWN;
-            if (projectile_type == RapidProjectile) PlayRapidShotSound();
-            else PlayScrewShotSound();
+            shoot_cooldown = SHOOT_COOLDOWN;
+            PlayScrewShotSound();
         }
     }
 }

@@ -9,7 +9,6 @@
 #include "Rooms.h"
 #include "Scroll.h"
 #include "Print.h"
-#include "FlowField.h"
 #include "main.h"
 
 #include <gb/gb.h>
@@ -48,7 +47,6 @@ UINT8 e2e_dbg;   /* which bot branch ran this frame */
 UINT8 e2e_dbg2;
 UINT16 e2e_updates; /* game-loop updates (vs emulated frames = lag) */
 UINT8 e2e_t_rapid;    /* fire-rate chip owned (telemetry) */
-extern UINT8 player_rapid_fire;
 UINT8 e2e_et;  /* nearest enemy type (telemetry) */
 UINT8 e2e_skip_portal; /* a power-up is still in this room: don't take the portal yet */
 UINT16 e2e_ex;
@@ -199,13 +197,7 @@ static void E2E_CacheHazards(void) {
 	SPRITEMANAGER_ITERATE(i, spr) {
 		if (!IsEnemyType(spr->type) && spr->type != Boss && spr->type != Bomb && spr->type != SpawnPoint) continue;
 		if (e2e_nhz == E2E_HZ_MAX) break;
-		e2e_hz_path[e2e_nhz] = 0;
-		if (IsEnemyType(spr->type) && current_state == StateGame) {
-			/* The game's own flow field (what enemies follow): an enemy behind
-			 * a wall is as far away as its walk, not its straight line. */
-			UINT8 t = FlowFieldDistTo(spr);
-			if (t < 254) e2e_hz_path[e2e_nhz] = (UINT16)t << 3;
-		}
+		e2e_hz_path[e2e_nhz] = 0; /* 0 = no walk distance: straight line (flow field removed) */
 		e2e_hz[e2e_nhz++] = spr;
 	}
 }
@@ -1319,7 +1311,6 @@ static UINT8 E2E_LevelBot(Sprite* p) {
 		 * instead of the portal: same farm-coins / buy-the-blocking-doors /
 		 * walk-there loop a player would use. */
 		Sprite* pu = E2E_FindType(ElectricityPickup);
-		if (!pu) pu = E2E_FindType(FireRateChip);
 		if (pu) {
 			ox = pu->x;
 			oy = pu->y;
@@ -1603,7 +1594,6 @@ void E2E_OnGameUpdate(void) BANKED {
 	/* Whole game, rooms 0-4: farm coins, buy doors, grab every power-up
 	 * (E2E_LevelBot picks the goals), take each portal. The boss run, boss
 	 * fight and the Win screen are handled by the hooks below. */
-	e2e_t_rapid = player_rapid_fire;
 	e2e_keys = E2E_LevelBot(p);
 #endif
 

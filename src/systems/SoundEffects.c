@@ -149,27 +149,6 @@ void PlayBombExplosionSound(void) BANKED {
            0x80);  // NR44: restart
 }
 
-/* Fire-rate chip picked up: bright rising "power-up" chirp (long upward sweep). */
-void PlayFireChipSound(void) BANKED {
-    PlayFx(CHANNEL_1, 20,
-           0x27,   // NR10: sweep time 2, increase, shift 7 (slow climb)
-           0x80,   // NR11: 50% duty
-           0xF2,   // NR12: volume 15, envelope down, step 2
-           0x00,   // NR13: freq low  (x = 0x600 ~ 256 Hz start)
-           0x86);  // NR14: freq high, restart
-}
-
-/* Rapid-fire dart: short, high, thin "pip" (quieter than the screw shot so
- * 2.5x the shots doesn't get tiring). */
-void PlayRapidShotSound(void) BANKED {
-    PlayFx(CHANNEL_1, 3,
-           0x00,   // NR10: no sweep
-           0x40,   // NR11: 25% duty
-           0x71,   // NR12: volume 7, fast fade
-           0xA0,   // NR13: freq low  (x = 0x7A0 ~ 1.4 kHz)
-           0x87);  // NR14: freq high, restart
-}
-
 /* Bomb about to blow: short dry tick (call every ~15 frames in its last second). */
 void PlayBombTickSound(void) BANKED {
     PlayFx(CHANNEL_4, 2,

@@ -16,7 +16,6 @@
 #include "SoftReset.h"
 #include "SpriteBudget.h"
 #include "E2E.h"
-#include "FlowField.h"
 #define RANDOM rand()
 #define ENEMY_SPAWN_DELAY 180   // frames between spawns
 #define NEXT_ROUND_TIMER 300
@@ -75,8 +74,6 @@ UINT8 current_level = 1;
 UINT8 waiting_for_start = 1;
 UINT8 pending_room_transition = 0;
 UINT8 pending_electric_pickup = 0;
-UINT8 pending_firechip_pickup = 0; /* FireRateChip.c -> granted in UPDATE */
-UINT8 player_rapid_fire = 0;       /* fire-rate chip owned (SpritePlayer.c) */
 
 UINT16 ready_coins = 0; // Player's currency
 UINT8 player_lives = DEBUG_STARTING_LIVES;
@@ -123,7 +120,6 @@ const UINT8 level_lengths[MAX_LEVELS] = {
     6, 7, 7, 8, 9
 };
 UINT8 enemy_spawn_index = 0;
-extern UINT8 player_hp; /* SpritePlayer.c, for the HUD */
 
 // Next spawn position, chosen SPAWN_WARNING_FRAMES early so its portal can
 // warn the player. Cleared on every wave/room reset (old room's position).
@@ -131,10 +127,22 @@ static UINT8 next_spawn_picked = 0;
 static UINT16 next_spawn_x;
 static UINT16 next_spawn_y;
 
+// HUD window is 20 tiles wide x 2 rows. INIT_CONSOLE only loads the font;
+// it never clears the window map, so any cell no DPrintf reaches keeps tile 0
+// of the room tileset (the grass floor) behind the text. Blank both rows once
+// with font spaces; later prints overwrite them and keep their trailing pad.
+static void InitHudConsole(void) {
+    INIT_CONSOLE(font, 2);
+    DPRINT_POS(0, 0);
+    DPrintf("                    "); // 20 spaces = full screen width
+    DPRINT_POS(0, 1);
+    DPrintf("                    ");
+}
+
 void SyncGameHud(void) {
     INIT_CONSOLE(font, 2);
     DPRINT_POS(0, 1);
-    DPrintf("Coins:%d Lives:%d HP%d ", ready_coins, player_lives, player_hp);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 }
 
 static void ClampLevel(void) {
@@ -281,8 +289,6 @@ void START() {
     ready_coins = DEBUG_START_COINS;
     player_lives = DEBUG_STARTING_LIVES;
     player_electric_attack = DEBUG_START_ELECTRIC;
-    player_rapid_fire = 0;
-    pending_firechip_pickup = 0;
     pending_room_transition = 0;
     pending_electric_pickup = 0;
 
@@ -297,7 +303,7 @@ void START() {
 
     InitRoomScrollFromTable(current_room);
 
-    INIT_CONSOLE(font, 2);
+    InitHudConsole();
     DPRINT_POS(0, 0);
     DPrintf("       Level %d      ", current_level);
     DPRINT_POS(0, 1);
@@ -336,7 +342,6 @@ void CheckForPlayerDeath() {
         current_room = DEBUG_START_ROOM;
         ready_coins = DEBUG_START_COINS;
         player_electric_attack = 0;
-        player_rapid_fire = 0;
 
         // Clear the screen and show restart message
         DPRINT_POS(0, 0);
@@ -412,12 +417,6 @@ void UPDATE() {
         return;
     }
 
-    if (pending_firechip_pickup) {
-        pending_firechip_pickup = 0;
-        player_rapid_fire = 1;
-        PlayFireChipSound();
-    }
-
     if (pending_electric_pickup) {
         pending_electric_pickup = 0;
         player_electric_attack = 1;
@@ -428,9 +427,8 @@ void UPDATE() {
     }
 
     DPRINT_POS(0, 1);
-    DPrintf("Coins:%d Lives:%d HP%d ", ready_coins, player_lives, player_hp);
+    DPrintf("Coins:%d Lives:%d    ", ready_coins, player_lives);
 
-    FlowFieldUpdate();
     SpawnEnemies();
     
     CheckForNextLevel();

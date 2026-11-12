@@ -4,7 +4,7 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
-#include "FlowField.h"
+#include "EnemyUnstick.h"
 #include "StateGame.h"
 #include "SoundEffects.h"
 
@@ -38,6 +38,7 @@ static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
 }
 
 void START() {
+    EnemyUnstickReset(THIS);
     THIS->custom_data[CD_FRAME_TIMER] = WALK_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 3;
     THIS->custom_data[CD_MOVE_TIMER] = 0;
@@ -83,8 +84,8 @@ void UPDATE() {
             else if (scroll_target->x < THIS->x - 1) dx = -1;
             else if (scroll_target->y > THIS->y + 1) dy = 1;
             else if (scroll_target->y < THIS->y - 1) dy = -1;
-            EnemySteer(THIS, &dx, &dy); /* follow corridors (FlowField.c) */
         }
+        EnemyUnstickSteer(THIS, &dx, &dy); /* escape wall jitter (EnemyUnstick.c) */
 
         if ((--THIS->custom_data[CD_FRAME_TIMER]) == 0) {
             THIS->custom_data[CD_FRAME_TIMER] = WALK_SPEED;

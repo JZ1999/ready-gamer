@@ -5,7 +5,7 @@
 #include "SpriteManager.h"
 #include "Scroll.h"
 #include "SpriteData.h"
-#include "FlowField.h"
+#include "EnemyUnstick.h"
 
 #define CD_FRAME_TIMER 1
 // Cycles 0,1,2 across chase ticks; slot 4 is free (health/frame/blink/move
@@ -25,6 +25,7 @@ static UINT8 CustomTranslateSprite(Sprite* sprite, INT8 x, INT8 y) {
 }
 
 void START() {
+    EnemyUnstickReset(THIS);
     THIS->custom_data[CD_FRAME_TIMER] = ENEMY_SPEED;
     THIS->custom_data[CD_ENEMY_HEALTH] = 3;
     THIS->custom_data[CD_MOVE_TIMER] = 0;
@@ -57,8 +58,8 @@ void UPDATE() {
         if(scroll_target->y > THIS->y + 1) dy = 1;
         else if(scroll_target->y < THIS->y - 1) dy = -1;
     }
+    EnemyUnstickSteer(THIS, &dx, &dy); /* escape wall jitter (EnemyUnstick.c) */
 
-    EnemySteer(THIS, &dx, &dy); /* follow corridors (FlowField.c) */
 
     UINT8 frame = THIS->anim_frame;
 

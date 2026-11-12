@@ -287,3 +287,4 @@ ZGB_linux/
 tools/e2e/linux/rgrun
 # Linux e2e runner: built asset converters
 tools/e2e/linux/bin/
+INIT_HISTORY.md

@@ -46,12 +46,35 @@ typedef enum {
 #define DOOR_HITBOX_H 16
 
 // Player visible pixels in player.gbr (x 1..14, y 1..15 on every frame).
-// Not used by door blocking anymore (doors now block like wall tiles); kept
-// as measured reference for the pending damage-hurtbox decision.
+// Used as the player's damage hurtbox (Hurtbox.c).
 #define PLAYER_BODY_X 1
 #define PLAYER_BODY_Y 1
 #define PLAYER_BODY_W 14
 #define PLAYER_BODY_H 15
+
+// Enemy visible pixels (union of all frames), used for contact damage instead
+// of ZGB's coll box: enemy metas are 8x8, so their coll box only covered the
+// top-left quarter of the drawing and hits fired below/right of the art.
+// Basic/Tank: x 0..15, y 1..14
+#define BASIC_BODY_X 0
+#define BASIC_BODY_Y 1
+#define BASIC_BODY_W 16
+#define BASIC_BODY_H 14
+// Speed: x 2..13, y 3..10
+#define SPEED_BODY_X 2
+#define SPEED_BODY_Y 3
+#define SPEED_BODY_W 12
+#define SPEED_BODY_H 8
+// Bomber: full 16x16
+#define BOMBER_BODY_X 0
+#define BOMBER_BODY_Y 0
+#define BOMBER_BODY_W 16
+#define BOMBER_BODY_H 16
+// Charge (hand-written gfx): x 0..13, y 0..11
+#define CHARGE_BODY_X 0
+#define CHARGE_BODY_Y 0
+#define CHARGE_BODY_W 14
+#define CHARGE_BODY_H 12
 
 // Coin pickup
 #define CD_COIN_VALUE 0 // Ready Coins granted on pickup, set from CoinPickupPlacement
@@ -73,8 +96,5 @@ typedef enum {
 #define IsEnemyType(type) ((type) == BasicVirus || (type) == SpeedVirus || (type) == TankVirus || (type) == BomberVirus || (type) == ChargeVirus)
 #define IsDoorType(type) ((type) == Door)
 
-// Ready Coins paid per kill: tougher enemies pay more (Tank has 5 HP, Charge
-// dashes) so the maze rooms' doors don't turn into a grind.
-#define KillCoinValue(type) (((type) == TankVirus || (type) == ChargeVirus) ? 2 : 1)
 
 #endif
