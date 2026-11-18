@@ -1,6 +1,19 @@
 # Session notes (local — read first each session)
 
-Last updated: 2026-10-10. Branch: `feature/map5-spawn-locks`.
+Last updated: 2026-11-18. Branch: `main` (`e28c19b` + uncommitted Hurtbox fix).
+
+## >>> RESUME HERE (2026-11-18) — wall-through damage fixed, hardware ROM 0c42386d <<<
+
+- `Hurtbox.c` `WallBetween()`: contact damage skipped if a full brick lies between enemy and player wall-box centers (enemy 2x2 wall box vs 16px body let Tank hit through 1-tile walls). User verified in Emulicious.
+- All DEBUG back to release; clean Release build; PyBoy release_verify OK. ROM: `Game-Boy-releases/2026-11-18/READY_GAMER_FINAL_0c42386d.gb`.
+- Not committed. Next: commit/push on request, flash.
+
+## >>> RESUME HERE (2026-11-12) — hardware build pushed, not flashed <<<
+
+- Pushed `e28c19b` to `origin/main`: HUD window cleared on START (grass in col 20), drawn-pixel damage hurtbox (`Hurtbox.c`), stuck-enemy sidestep (`EnemyUnstick.c`, Tank/Speed/Bomber/Charge), fire-rate chip / HP HUD / per-kill coins / flow field removed (user: flow field not wanted).
+- Hardware ROM: `Game-Boy-releases/2026-11-12/READY_GAMER_FINAL_33cb5a87.gb` (MBC5, 128 KB, checksums OK). Same file for the friend's emulator test and the cart.
+- Next: friend playtest; user checks stuck-enemy spot (PyBoy didn't reproduce it); decide hurtbox forgiveness margin, bullets-vs-enemy drawn boxes, Basic -> EnemyUnstick; pick cart/flasher and flash.
+
 
 ## >>> RESUME HERE (2026-10-10) — committed + pushed, Release clean <<<
 
