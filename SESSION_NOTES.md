@@ -1,12 +1,12 @@
 # Session notes (local — read first each session)
 
-Last updated: 2026-11-18. Branch: `main` (`e28c19b` + uncommitted Hurtbox fix).
+Last updated: 2026-11-18. Branch: `main` (pushed `9f91574`).
 
 ## >>> RESUME HERE (2026-11-18) — wall-through damage fixed, hardware ROM 0c42386d <<<
 
 - `Hurtbox.c` `WallBetween()`: contact damage skipped if a full brick lies between enemy and player wall-box centers (enemy 2x2 wall box vs 16px body let Tank hit through 1-tile walls). User verified in Emulicious.
 - All DEBUG back to release; clean Release build; PyBoy release_verify OK. ROM: `Game-Boy-releases/2026-11-18/READY_GAMER_FINAL_0c42386d.gb`.
-- Not committed. Next: commit/push on request, flash.
+- Fix pushed in `9f91574`. Boss-fight debug tests reverted; clean rebuild reproduces SHA 0c42386d exactly, release_verify OK. ROM sent to friend for playtest. Next: flash.
 
 ## >>> RESUME HERE (2026-11-12) — hardware build pushed, not flashed <<<
 
